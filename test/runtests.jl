@@ -14,6 +14,6 @@ using Aqua
         @test_throws ArgumentError OffsetTable(Int[])
         @test rand(OffsetTable([1, 1])) in [1, 2]
         @test_broken rand(OffsetTable([1, 0])) == 1 # TODO: support 100% probability
-        @test_broken rand(OffsetTable([1, 1, 1])) in [1, 2, 3] # TODO: support non-power of 2 lengths
+        @test rand(OffsetTable([1, 1, 1])) in [1, 2, 3]
     end
 end

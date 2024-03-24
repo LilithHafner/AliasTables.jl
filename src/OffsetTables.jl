@@ -14,6 +14,13 @@ OffsetTable{T}(weights::AbstractVector{<:Real}) where T = OffsetTable{T, Int}(we
 OffsetTable{T, I}(weights::AbstractVector{<:Real}) where {T, I} = _offset_table(I, normalize_to_uint(T, weights))
 OffsetTable{T, I}(weights::AbstractVector{T}) where {T<:Real, I} = _offset_table(I, weights)
 
+struct WithZeros{T} <: AbstractVector{T}
+    parent::AbstractVector{T}
+    length::Int
+end
+Base.size(wz::WithZeros) = (wz.length,)
+Base.getindex(wz::WithZeros{T}, i) where T = i <= length(wz.parent) ? wz.parent[i] : zero(T)
+
 function _offset_table(::Type{I}, weights::AbstractVector{<:Unsigned}) where I
     T = eltype(weights)
     Base.require_one_based_indexing(weights)
@@ -29,23 +36,23 @@ function _offset_table(::Type{I}, weights::AbstractVector{<:Unsigned}) where I
         return OffsetTable(probability_offset)
     end
 
-    thirsty_i = surplus_i = current_i = firstindex(weights)
-    current_desired = weights[current_i]
-
+    weights_extended = WithZeros(weights, len)
+    thirsty_i = surplus_i = current_i = firstindex(weights_extended)
+    current_desired = weights_extended[current_i]
 
     while true
         # @show current_i, current_desired, points_per_cell
         if current_desired <= points_per_cell # Surplus
             excess = points_per_cell - current_desired                     # Assign this many extra points
-            thirsty_i = findnext(>(points_per_cell), weights, thirsty_i+1) # Which is the next available thirsty cell
+            thirsty_i = findnext(>(points_per_cell), weights_extended, thirsty_i+1) # Which is the next available thirsty cell
             thirsty_i === nothing && break                                 # If there is no thirsty cell, handle below
             probability_offset[current_i] = (excess, thirsty_i-current_i)  # To the targeted cell
             current_i = thirsty_i                                          # Now we have to make sure that thristy cell gets exactly what it wants and no more
-            current_desired = weights[current_i] - excess                  # It wants what it wants nad hasn't already been transferred
+            current_desired = weights_extended[current_i] - excess                  # It wants what it wants nad hasn't already been transferred
         else                                  # Thirsty (strictly)
-            surplus_i = findnext(<=(points_per_cell), weights, surplus_i+1) # Find the next surplus cell
+            surplus_i = findnext(<=(points_per_cell), weights_extended, surplus_i+1) # Find the next surplus cell
             surplus_i === nothing && throw(ArgumentError("sum(weights) is too high")) # Lacking points, so unnable to reach the desired weight
-            excess = points_per_cell - weights[surplus_i]                   # Assign this many extra points
+            excess = points_per_cell - weights_extended[surplus_i]                   # Assign this many extra points
             probability_offset[surplus_i] = (excess, current_i-surplus_i)   # From the cell with surplus to this cell
             current_desired -= excess                                       # We now don't want as many points (and may even no longer be thristy)
         end
@@ -57,9 +64,9 @@ function _offset_table(::Type{I}, weights::AbstractVector{<:Unsigned}) where I
     # Just right. There are no thristy cells left and no current surplus. All that's left
     # are future surplus cells, all of which should be a surplus of exactly 0.
     while true
-        surplus_i = findnext(<=(points_per_cell), weights, surplus_i+1) # Find the next surplus cell
+        surplus_i = findnext(<=(points_per_cell), weights_extended, surplus_i+1) # Find the next surplus cell
         surplus_i === nothing && break
-        weights[surplus_i] == points_per_cell || throw(ArgumentError("sum(weights) is too low"))
+        weights_extended[surplus_i] == points_per_cell || throw(ArgumentError("sum(weights) is too low"))
         probability_offset[surplus_i] = (0, 0)
     end
 
