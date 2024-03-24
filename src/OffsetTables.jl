@@ -39,7 +39,7 @@ function _offset_table(::Type{I}, weights::AbstractVector{<:Unsigned}) where I
         else                                  # Thirsty (strictly)
             surplus_i = findnext(<=(points_per_cell), weights, surplus_i+1) # Find the next surplus cell
             surplus_i === nothing && throw(ArgumentError("sum(weights) is too high")) # Lacking points, so unnable to reach the desired weight
-            excess = weights[surplus_i] - points_per_cell                   # Assign this many extra points
+            excess = points_per_cell - weights[surplus_i]                   # Assign this many extra points
             probability_offset[surplus_i] = (excess, current_i-surplus_i)   # From the cell with surplus to this cell
             current_desired -= excess                                       # We now don't want as many points (and may even no longer be thristy)
         end
@@ -130,8 +130,8 @@ end
 function normalize_to_uint(::Type{T}, v::AbstractVector{<:Real}) where {T <: Unsigned}
     length(v) <= 1 && return ones(T, length(b))
     sm = sum(v)
-    res = [floor(T, ldexp(x, 8sizeof(T))) for x in v] # TODO: make this lazy & non-allocating
-    leftover = sum(widen, res) - typemax(T)-1
+    res = [floor(T, ldexp(x/sm, 8sizeof(T))) for x in v] # TODO: make this lazy & non-allocating
+    leftover = signed(sum(widen, res) - typemax(T)-1)
     argmx = argmax(res)
     if (res[argmx] -= leftover) < 0
         throw(ArgumnetError("normalization failed")) # TODO: eliminate this
