@@ -22,10 +22,16 @@ function _offset_table(::Type{I}, weights::AbstractVector{<:Unsigned}) where I
     len = 1 << bitshift#next_or_eq_power_of_two(length(weights))
     points_per_cell = one(T) << (8*sizeof(T) - bitshift)#typemax(T)+1 / len
 
+    probability_offset = Memory{Tuple{T, I}}(undef, len)
+    length(weights) == 0 && throw(ArgumentError("weights must be non-empty"))
+    if length(weights) == 1
+        probability_offset[1] = (0, 0)
+        return OffsetTable(probability_offset)
+    end
+
     thirsty_i = surplus_i = current_i = firstindex(weights)
     current_desired = weights[current_i]
 
-    probability_offset = Memory{Tuple{T, I}}(undef, len)
 
     while true
         # @show current_i, current_desired, points_per_cell
@@ -65,7 +71,7 @@ function sample(rng, ot::OffsetTable{T, I}) where {T, I}
 end
 
 function sample(x::T, ot::OffsetTable{T, I}) where {T, I}
-    count_ones(x) == 1 || return zero(I) # This should never happen, but it makes the @inbounds safe
+    count_ones(length(ot.probability_offset)) == 1 || return zero(I) # This should never happen, but it makes the @inbounds safe
     shift = 8sizeof(T) - Base.top_set_bit(length(ot.probability_offset)) + 1
     cell = (x >> shift) + 1
     val = x & ((one(T) << shift) - one(T))
@@ -149,7 +155,7 @@ end
 ## Mediocre float handling
 
 function normalize_to_uint(::Type{T}, v::AbstractVector{<:Real}) where {T <: Unsigned}
-    length(v) <= 1 && return ones(T, length(b))
+    length(v) <= 1 && return ones(T, length(v))
     sm = sum(v)
     res = [floor(T, ldexp(x/sm, 8sizeof(T))) for x in v] # TODO: make this lazy & non-allocating
     leftover = signed(sum(widen, res) - typemax(T)-1)
