@@ -33,5 +33,50 @@ using Aqua
         a = OffsetTable([1, 2, 3])
         b = OffsetTable([1, 2, 3, 0, 0])
         @test a == b
+
+        data = [
+            [
+                OffsetTable([1, 2, 5]),
+                OffsetTable([2, 4, 10]),
+                OffsetTable([1, 2, 5] * 1729),
+                OffsetTable([1, 2, 5, 0, 0]),
+                OffsetTable{UInt16, Int32}([1,2,5]),
+                OffsetTable{UInt16}([1,2,5]),
+                OffsetTable{UInt, Int32}([1,2,5]),
+                OffsetTable(UInt[unsigned(1)<<61, unsigned(2)<<61, unsigned(5)<<61]),
+            ],[
+                OffsetTable([1, 2.0001, 5]),
+            ],[
+                OffsetTable([0,0,0,0,1]),
+                OffsetTable([0,0,0,0,1,0,0,0,0,0,0,0]),
+                OffsetTable([1e-70,0,0,0,1]),
+                OffsetTable([1e-70,0,0,0,1,0,0,0,1e-70]),
+            ],[
+                OffsetTable([1, 2, 3, 5]),
+                OffsetTable{UInt64, Int8}([1, 2, 3, 5]),
+            ],[
+                OffsetTable{UInt16}([1, 2, 3, 5]),
+                OffsetTable{UInt16, Int8}([1, 2, 3, 5]),
+            ]
+        ]
+
+        for group1 in data, group2 in data, a in group1, b in group2
+            if group1 === group2
+                for a in [a, deepcopy(a)], b in [b, deepcopy(b)]
+                    @test a == b
+                    hash(a) == hash(b) || @show a, b
+                    @test hash(a) == hash(b)
+                    @test OffsetTables.probabilities(float, a) == OffsetTables.probabilities(float, b)
+                    if eltype(OffsetTables.probabilities(a)) == eltype(OffsetTables.probabilities(b))
+                        @test OffsetTables.probabilities(a) == OffsetTables.probabilities(b)
+                    end
+                end
+            else
+                @test a != b
+                @test hash(a) != hash(b)
+                @test OffsetTables.probabilities(float, a) != OffsetTables.probabilities(float, b)
+                @test OffsetTables.probabilities(a) != OffsetTables.probabilities(b)
+            end
+        end
     end
 end

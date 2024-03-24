@@ -179,8 +179,33 @@ end
 # These naive implementations are equivalent to computing equality based on
 # `WithZeros(probabilities, Inf)` because the constrors are deterministic w.r.t
 # the input weights exclusind trailing zeros.
-Base.:(==)(ot1::OffsetTable, ot2::OffsetTable) = ot1.probability_offset == ot2.probability_offset
-Base.hash(ot::OffsetTable, h::UInt) = hash(ot.probability_offset, h)
+Base.:(==)(ot1::OffsetTable{T}, ot2::OffsetTable{T}) where T = ot1.probability_offset == ot2.probability_offset
+function Base.:(==)(ot1::OffsetTable{T1}, ot2::OffsetTable{T2}) where {T1, T2}
+    bitshift = 8(sizeof(T1) - sizeof(T2))
+    length(ot1.probability_offset) == length(ot2.probability_offset) || return false
+    for (po1, po2) in zip(ot1.probability_offset, ot2.probability_offset)
+        po1[2] == po2[2] &&
+        if bitshift > 0
+            po1[1] == T1(po2[1]) << bitshift
+        else
+            T2(po1[1]) << -bitshift == po2[1]
+        end || return false
+    end
+    true
+end
+struct MapVector{T, F, P} <: AbstractVector{T}
+    parent::P
+    f::F
+end
+Base.size(mv::MapVector) = size(mv.parent)
+Base.getindex(mv::MapVector{T, F, P}, i) where {T, F, P} = mv.f(mv.parent[i])
+function Base.hash(ot::OffsetTable, h::UInt)
+    h ⊻= Sys.WORD_SIZE == 32 ? 0x7719cd5e : 0x0a0c5cfeeb10f090
+    # isempty(ot.probability_offset) && return hash(0, h) # This should never happen, but it makes first not throw.
+    po1 = first(ot.probability_offset)
+    norm(x) = (ldexp(float(x[1]), -8sizeof(x[1])), x[2])
+    hash(MapVector{typeof(norm(po1)), typeof(norm), typeof(ot.probability_offset)}(ot.probability_offset, norm), h)
+end
 
 ## Mediocre float handling
 
