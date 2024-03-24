@@ -60,12 +60,12 @@ function _offset_table(::Type{I}, weights::AbstractVector{<:Unsigned}) where I
     onz = get_only_nonzero(weights)
     onz == -2 || return _constant_offset_table(I, T, onz)
 
-    bitshift = Base.top_set_bit(length(weights) - 1)
+    bitshift = Base.top_set_bit(findlast(!iszero, weights) - 1)
     len = 1 << bitshift#next_or_eq_power_of_two(length(weights))
     points_per_cell = one(T) << (8*sizeof(T) - bitshift)#typemax(T)+1 / len
 
     probability_offset = Memory{Tuple{T, I}}(undef, len)
-    if length(weights) == 1
+    if len == 1
         probability_offset[1] = (0, 0)
         return OffsetTable(probability_offset)
     end
