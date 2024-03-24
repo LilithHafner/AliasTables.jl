@@ -16,4 +16,10 @@ using Aqua
         @test rand(OffsetTable([1, 0])) == 1
         @test rand(OffsetTable([1, 1, 1])) in [1, 2, 3]
     end
+
+    @testset "Equality and hashing" begin
+        a = OffsetTable([1, 2, 3])
+        b = OffsetTable([1, 2, 3, 0, 0])
+        @test_broken a == b
+    end
 end
