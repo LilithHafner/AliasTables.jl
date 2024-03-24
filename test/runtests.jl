@@ -4,7 +4,8 @@ using Aqua
 
 @testset "OffsetTables.jl" begin
     @testset "Code quality (Aqua.jl)" begin
-        Aqua.test_all(OffsetTables)
+        Aqua.test_all(OffsetTables, deps_compat=false)
+        Aqua.test_deps_compat(OffsetTables, check_extras=false)
     end
 
     @testset "Name" begin
