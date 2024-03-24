@@ -93,7 +93,16 @@ probabilities(::typeof(float), ot::OffsetTable{T}) where T =
 
 ### Show
 function Base.show(io::IO, ot::OffsetTable{T, I}) where {T, I}
-    print(io, typeof(ot), "(")
+    print(io, OffsetTable)
+    if get(io, :typeinfo, nothing) != OffsetTable{T, I} && (T != UInt || I != Int)
+        if I == Int
+            print(io, "{", T, "}")
+        else
+            print(io, "{", T, ", ", I, "}")
+        end
+    end
+    print(io, "(")
+    # print(IOContext(io, :typeinfo=>Vector{T}), probabilities(ot))
     print(IOContext(io, :typeinfo=>Memory{Tuple{T, I}}), ot.probability_offset)
     print(io, ")")
 end
