@@ -16,6 +16,7 @@ using Aqua
         @test rand(OffsetTable([1, 0])) == 1
         @test rand(OffsetTable([1, 1, 1])) in [1, 2, 3]
         @test_throws MethodError OffsetTable(OffsetTable([1]).probability_offset)
+        @test rand(OffsetTable([1e-70, 1])) == 2
     end
 
     @testset "Invalid weight error messages" begin

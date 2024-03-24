@@ -186,6 +186,7 @@ Base.hash(ot::OffsetTable, h::UInt) = hash(ot.probability_offset, h)
 
 function normalize_to_uint(::Type{T}, v::AbstractVector{<:Real}) where {T <: Unsigned}
     isempty(v) && throw(ArgumentError("weights must be non-empty"))
+
     onz = get_only_nonzero(v)
     if onz != -2
         res = zeros(T, length(v))
@@ -195,7 +196,18 @@ function normalize_to_uint(::Type{T}, v::AbstractVector{<:Real}) where {T <: Uns
 
     length(v) <= 1 && return ones(T, length(v))
     sm = sum(v)
-    res = [floor(T, ldexp(x/sm, 8sizeof(T))) for x in v] # TODO: make this lazy & non-allocating
+    res = [x <= typemax(T) ? floor(T, x) : typemax(T) for x in (ldexp(x/sm, 8sizeof(T)) for x in v)] # TODO: make this lazy & non-allocating
+
+    count_nonzero = 0
+    for x in res
+        if x != 0
+            count_nonzero += 1
+            count_nonzero > 1 && break
+        end
+    end
+    @assert count_nonzero != 0
+    count_nonzero == 1 && return res # No need to normalize
+
     leftover = signed(sum(widen, res) - typemax(T)-1)
     argmx = argmax(res)
     if (res[argmx] -= leftover) < 0
