@@ -107,6 +107,24 @@ function Base.show(io::IO, ot::OffsetTable{T, I}) where {T, I}
     print(io, ")")
 end
 
+### Equality and hashing
+function Base.:(==)(ot1::OffsetTable, ot2::OffsetTable)
+    ot1 === ot2 && return true
+    length(ot1.probability_offset) == length(ot2.probability_offset) || return false
+    probabilities(ot1) == probabilities(ot2)
+end
+
+function Base.hash(ot::OffsetTable{T}, h::UInt) where T
+    bitshift = Base.top_set_bit(length(ot.probability_offset) - 1)
+    points_per_cell = one(T) << (8*sizeof(T) - bitshift)#typemax(T)+1 / len
+    x = Sys.WORD_SIZE == 32 ? 0xda0ee6be : 0xdb786856234500c1
+    for (i, (prob, offset)) in enumerate(ot.probability_offset)
+        h += hash(i, x)*((points_per_cell - prob)%UInt)
+        h += hash(i+offset, x)*(prob%UInt)
+    end
+    h
+end
+
 ## Mediocre float handling
 
 function normalize_to_uint(::Type{T}, v::AbstractVector{<:Real}) where {T <: Unsigned}
