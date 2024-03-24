@@ -4,6 +4,22 @@ export OffsetTable
 
 struct OffsetTable{T, I}
     probability_offset::Memory{Tuple{T, I}}
+    """
+        _OffsetTable(probability_offset::Memory{Tuple{T, I}})
+
+    Construct an `OffsetTable` from a `Memory` of `(probability, offset)` pairs.
+
+    Callers are responsible for ensuring that
+
+        probability_offset == OffsetTable(probabilities(_OffsetTable(probability_offset))).probability_offset
+
+    i.e. that wherever they got the `probability_offset` from, it is a form that would be
+    produced by the internal default construcors (which are subject to change).
+
+    If callers fail to do this, then equality and hashing may be broken.
+    """
+    _OffsetTable(probability_offset::Memory{Tuple{T, I}}) where {T, I} = new{T, I}(probability_offset)
+    global _OffsetTable
 end
 
 OffsetTable(weights::AbstractVector{<:Real}) = OffsetTable{UInt, Int}(weights)
@@ -30,7 +46,7 @@ function _constant_offset_table(::Type{I}, ::Type{T}, index) where {I, T}
     for i in 1:len
         probability_offset[i] = (points_per_cell, index-i)
     end
-    OffsetTable(probability_offset)
+    _OffsetTable(probability_offset)
 end
 
 function get_only_nonzero(weights)
@@ -67,7 +83,7 @@ function _offset_table(::Type{I}, weights::AbstractVector{<:Unsigned}) where I
     probability_offset = Memory{Tuple{T, I}}(undef, len)
     if len == 1
         probability_offset[1] = (0, 0)
-        return OffsetTable(probability_offset)
+        return _OffsetTable(probability_offset)
     end
 
     weights_extended = WithZeros(weights, len)
@@ -104,7 +120,7 @@ function _offset_table(::Type{I}, weights::AbstractVector{<:Unsigned}) where I
         probability_offset[surplus_i] = (0, 0)
     end
 
-    OffsetTable(probability_offset)
+    _OffsetTable(probability_offset)
 end
 
 function sample(rng, ot::OffsetTable{T, I}) where {T, I}
@@ -159,43 +175,12 @@ function Base.show(io::IO, ot::OffsetTable{T, I}) where {T, I}
 end
 
 ### Equality and hashing
-function Base.:(==)(ot1::OffsetTable, ot2::OffsetTable)
-    ot1 === ot2 && return true
-    length(ot1.probability_offset) == length(ot2.probability_offset) || return false
-    length(ot1.probability_offset) <= 1 && return true
-    ot1.probability_offset == ot2.probability_offset && return true
 
-    # return false
-    # TODO return here if we control all constructors and they are deterministic
-    # w.r.t. probability distributions
-
-    test_index = rand(eachindex(ot1.probability_offset))
-    delta = ot2.probability_offset[test_index][1] - ot1.probability_offset[test_index][1]
-    for (i, (prob, offset)) in enumerate(ot1.probability_offset)
-        if i + offset == test_index
-            delta += prob
-        end
-    end
-    for (i, (prob, offset)) in enumerate(ot2.probability_offset)
-        if i + offset == test_index
-            delta -= prob
-        end
-    end
-    iszero(delta) || return false
-
-    probabilities(ot1) == probabilities(ot2)
-end
-
-function Base.hash(ot::OffsetTable{T}, h::UInt) where T
-    bitshift = Base.top_set_bit(length(ot.probability_offset) - 1)
-    points_per_cell = one(T) << (8*sizeof(T) - bitshift)#typemax(T)+1 / len
-    x = Sys.WORD_SIZE == 32 ? 0xda0ee6be : 0xdb786856234500c1
-    for (i, (prob, offset)) in enumerate(ot.probability_offset)
-        h += hash(i, x)*((points_per_cell - prob)%UInt)
-        h += hash(i+offset, x)*(prob%UInt)
-    end
-    h
-end
+# These naive implementations are equivalent to computing equality based on
+# `WithZeros(probabilities, Inf)` because the constrors are deterministic w.r.t
+# the input weights exclusind trailing zeros.
+Base.:(==)(ot1::OffsetTable, ot2::OffsetTable) = ot1.probability_offset == ot2.probability_offset
+Base.hash(ot::OffsetTable, h::UInt) = hash(ot.probability_offset, h)
 
 ## Mediocre float handling
 
