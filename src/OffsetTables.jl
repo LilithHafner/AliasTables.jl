@@ -81,6 +81,10 @@ function sample(x::T, ot::OffsetTable{T, I}) where {T, I}
     (((val < prob) * offset + cell)%I)::I
 end
 
+### Random API
+using Random
+Random.rand(rng::Random.AbstractRNG, ot::Random.SamplerTrivial{<:OffsetTable}) = sample(rng, ot.self)
+
 ### Reconstruct probabilities
 function probabilities(ot::OffsetTable{T}) where T
     bitshift = Base.top_set_bit(length(ot.probability_offset) - 1)
