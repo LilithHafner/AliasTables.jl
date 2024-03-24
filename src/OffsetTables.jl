@@ -21,9 +21,42 @@ end
 Base.size(wz::WithZeros) = (wz.length,)
 Base.getindex(wz::WithZeros{T}, i) where T = i <= length(wz.parent) ? wz.parent[i] : zero(T)
 
+function _constant_offset_table(::Type{I}, ::Type{T}, index) where {I, T}
+    bitshift = Base.top_set_bit(index - 1)
+    len = 1 << bitshift#next_or_eq_power_of_two(length(weights))
+    points_per_cell = one(T) << (8*sizeof(T) - bitshift)#typemax(T)+1 / len
+
+    probability_offset = Memory{Tuple{T, I}}(undef, len)
+    for i in 1:len
+        probability_offset[i] = (points_per_cell, index-i)
+    end
+    OffsetTable(probability_offset)
+end
+
+function get_only_nonzero(weights)
+    only_nonzero = -1
+    for (i, w) in enumerate(weights)
+        if w > 0
+            if only_nonzero == -1
+                only_nonzero = i
+            else
+                only_nonzero = -2
+                break
+            end
+        elseif w < 0
+            throw(ArgumentError("found negative weight $w at index $i"))
+        end
+    end
+    only_nonzero == -1 && throw(ArgumentError("all weights are zero"))
+    only_nonzero
+end
+
 function _offset_table(::Type{I}, weights::AbstractVector{<:Unsigned}) where I
     T = eltype(weights)
     Base.require_one_based_indexing(weights)
+
+    onz = get_only_nonzero(weights)
+    onz == -2 || return _constant_offset_table(I, T, onz)
 
     bitshift = Base.top_set_bit(length(weights) - 1)
     len = 1 << bitshift#next_or_eq_power_of_two(length(weights))
@@ -166,6 +199,13 @@ end
 ## Mediocre float handling
 
 function normalize_to_uint(::Type{T}, v::AbstractVector{<:Real}) where {T <: Unsigned}
+    onz = get_only_nonzero(v)
+    if onz != -2
+        res = zeros(T, length(v))
+        res[onz] = 1
+        return res
+    end
+
     length(v) <= 1 && return ones(T, length(v))
     sm = sum(v)
     res = [floor(T, ldexp(x/sm, 8sizeof(T))) for x in v] # TODO: make this lazy & non-allocating

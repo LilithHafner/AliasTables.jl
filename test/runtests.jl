@@ -10,10 +10,10 @@ using Aqua
 
     @testset "Name" begin
         @test rand(OffsetTable([1])) == 1
-        @test rand(OffsetTable([0])) == 1
+        @test_throws ArgumentError OffsetTable([0])
         @test_throws ArgumentError OffsetTable(Int[])
         @test rand(OffsetTable([1, 1])) in [1, 2]
-        @test_broken rand(OffsetTable([1, 0])) == 1 # TODO: support 100% probability
+        @test rand(OffsetTable([1, 0])) == 1
         @test rand(OffsetTable([1, 1, 1])) in [1, 2, 3]
     end
 end
