@@ -55,6 +55,8 @@ function _offset_table(::Type{I}, weights::AbstractVector{<:Unsigned}) where I
     T = eltype(weights)
     Base.require_one_based_indexing(weights)
 
+    isempty(weights) && throw(ArgumentError("weights must be non-empty"))
+
     onz = get_only_nonzero(weights)
     onz == -2 || return _constant_offset_table(I, T, onz)
 
@@ -63,7 +65,6 @@ function _offset_table(::Type{I}, weights::AbstractVector{<:Unsigned}) where I
     points_per_cell = one(T) << (8*sizeof(T) - bitshift)#typemax(T)+1 / len
 
     probability_offset = Memory{Tuple{T, I}}(undef, len)
-    length(weights) == 0 && throw(ArgumentError("weights must be non-empty"))
     if length(weights) == 1
         probability_offset[1] = (0, 0)
         return OffsetTable(probability_offset)
@@ -199,6 +200,7 @@ end
 ## Mediocre float handling
 
 function normalize_to_uint(::Type{T}, v::AbstractVector{<:Real}) where {T <: Unsigned}
+    isempty(v) && throw(ArgumentError("weights must be non-empty"))
     onz = get_only_nonzero(v)
     if onz != -2
         res = zeros(T, length(v))
