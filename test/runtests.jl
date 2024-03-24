@@ -1,6 +1,7 @@
 using OffsetTables
 using Test
 using Aqua
+using RegressionTests
 
 @testset "OffsetTables.jl" begin
     @testset "Code quality (Aqua.jl)" begin
@@ -79,5 +80,9 @@ using Aqua
                 @test OffsetTables.probabilities(a) != OffsetTables.probabilities(b)
             end
         end
+    end
+
+    @testset "RegressionTests" begin
+        RegressionTests.test(skip_unsupported_platforms=true)
     end
 end
