@@ -111,6 +111,27 @@ end
 function Base.:(==)(ot1::OffsetTable, ot2::OffsetTable)
     ot1 === ot2 && return true
     length(ot1.probability_offset) == length(ot2.probability_offset) || return false
+    length(ot1.probability_offset) <= 1 && return true
+    ot1.probability_offset == ot2.probability_offset && return true
+
+    # return false
+    # TODO return here if we control all constructors and they are deterministic
+    # w.r.t. probability distributions
+
+    test_index = rand(eachindex(ot1.probability_offset))
+    delta = ot2.probability_offset[test_index][1] - ot1.probability_offset[test_index][1]
+    for (i, (prob, offset)) in enumerate(ot1.probability_offset)
+        if i + offset == test_index
+            delta += prob
+        end
+    end
+    for (i, (prob, offset)) in enumerate(ot2.probability_offset)
+        if i + offset == test_index
+            delta -= prob
+        end
+    end
+    iszero(delta) || return false
+
     probabilities(ot1) == probabilities(ot2)
 end
 
