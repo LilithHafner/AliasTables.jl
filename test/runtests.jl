@@ -29,6 +29,9 @@ using RegressionTests
         @test_throws ArgumentError("all weights are zero") OffsetTable(UInt[0])
         @test_throws ArgumentError("weights must be non-empty") OffsetTable(Int[])
         @test_throws ArgumentError("weights must be non-empty") OffsetTable(UInt[])
+        @test_throws ArgumentError("sum(weights) is too low") OffsetTable(UInt[123, 456])
+        @test_throws ArgumentError("sum(weights) is too high") OffsetTable(UInt[unsigned(3)<<62, unsigned(2)<<62, unsigned(3)<<62])
+        @test OffsetTables.probabilities(float, OffsetTable(UInt[unsigned(3)<<61, unsigned(2)<<61, unsigned(3)<<61])) == [3,2,3] ./ 8
     end
 
     @testset "Equality and hashing" begin

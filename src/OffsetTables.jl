@@ -147,7 +147,7 @@ function probabilities(ot::OffsetTable{T}) where T
         probs[i + offset] += prob
         probs[i] += points_per_cell - prob
     end
-    probs
+    resize!(probs, findlast(!iszero, probs))
 end
 
 probabilities(::typeof(float), ot::OffsetTable{T}) where T =
