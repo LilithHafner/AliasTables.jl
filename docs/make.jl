@@ -21,5 +21,6 @@ makedocs(;
 
 deploydocs(;
     repo="github.com/LilithHafner/OffsetTables.jl",
+    push_preview=true,
     devbranch="main",
 )
