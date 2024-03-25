@@ -81,10 +81,6 @@ function _offset_table(::Type{I}, weights::AbstractVector{<:Unsigned}) where I
     points_per_cell = one(T) << (8*sizeof(T) - bitshift)#typemax(T)+1 / len
 
     probability_offset = Memory{Tuple{T, I}}(undef, len)
-    if len == 1
-        probability_offset[1] = (0, 0)
-        return _OffsetTable(probability_offset)
-    end
 
     weights_extended = WithZeros(weights, len)
     thirsty_i = surplus_i = current_i = firstindex(weights_extended)
