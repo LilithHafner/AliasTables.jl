@@ -1,6 +1,7 @@
 using OffsetTables
 using Test
 using Aqua
+using Random
 using RegressionTests
 
 @testset "OffsetTables.jl" begin
@@ -35,6 +36,12 @@ using RegressionTests
         @test OffsetTables.probabilities(float, OffsetTable(UInt[unsigned(3)<<61, unsigned(2)<<61, unsigned(3)<<61])) == [3,2,3] ./ 8
     end
 
+    @testset "sample()" begin
+        @test Base.hasmethod(OffsetTables.sample, Tuple{UInt, OffsetTable{UInt, Int}})
+        @test Base.hasmethod(OffsetTables.sample, Tuple{Random.MersenneTwister, OffsetTable{UInt, Int}})
+        @test !Base.hasmethod(OffsetTables.sample, Tuple{UInt32, OffsetTable{UInt64, Int}})
+    end
+
     @testset "Exact" begin
         for i in 1:100
             p = rand(i)
@@ -54,6 +61,18 @@ using RegressionTests
             @test OffsetTables.probabilities(float, ot2) ≈  p ./ sum(p)
             # @test OffsetTable(OffsetTables.probabilities(float, ot2)) == ot2
             @test OffsetTable(OffsetTables.probabilities(ot2)) == ot2
+        end
+
+        function counts(x, levels)
+            c = zeros(Int, levels)
+            for v in x
+                c[v] += 1
+            end
+            c
+        end
+        let ot = OffsetTable{UInt16}([10, 5, 1])
+            @test counts(Iterators.map(x -> OffsetTables.sample(x, ot), typemin(UInt16):typemax(UInt16)), 3) ==
+                2^16/16 * [10, 5, 1]
         end
     end
 

@@ -1,5 +1,7 @@
 module OffsetTables
 
+using Random
+
 export OffsetTable
 
 struct OffsetTable{T, I}
@@ -119,7 +121,7 @@ function _offset_table(::Type{I}, weights::AbstractVector{<:Unsigned}) where I
     _OffsetTable(probability_offset)
 end
 
-function sample(rng, ot::OffsetTable{T, I}) where {T, I}
+function sample(rng::Random.AbstractRNG, ot::OffsetTable{T, I}) where {T, I}
     sample(rand(rng, T), ot)
 end
 
@@ -135,7 +137,6 @@ function sample(x::T, ot::OffsetTable{T, I}) where {T, I}
 end
 
 ### Random API
-using Random
 Random.rand(rng::Random.AbstractRNG, ot::Random.SamplerTrivial{<:OffsetTable}) = sample(rng, ot.self)
 Random.gentype(::Type{OffsetTable{T, I}}) where {T, I} = I
 
