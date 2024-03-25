@@ -30,8 +30,8 @@ OffsetTable{T}(weights::AbstractVector{<:Real}) where T = OffsetTable{T, Int}(we
 OffsetTable{T, I}(weights::AbstractVector{<:Real}) where {T, I} = _offset_table(I, normalize_to_uint(T, weights))
 OffsetTable{T, I}(weights::AbstractVector{T}) where {T<:Real, I} = _offset_table(I, weights)
 
-struct WithZeros{T} <: AbstractVector{T}
-    parent::AbstractVector{T}
+struct WithZeros{T, P <: AbstractVector{T}} <: AbstractVector{T}
+    parent::P
     length::Int
 end
 Base.size(wz::WithZeros) = (wz.length,)
