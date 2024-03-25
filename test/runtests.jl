@@ -34,6 +34,28 @@ using RegressionTests
         @test OffsetTables.probabilities(float, OffsetTable(UInt[unsigned(3)<<61, unsigned(2)<<61, unsigned(3)<<61])) == [3,2,3] ./ 8
     end
 
+    @testset "Exact" begin
+        for i in 1:100
+            p = rand(i)
+            ot = OffsetTable(p)
+            @test OffsetTables.probabilities(float, ot) ≈  p ./ sum(p)
+            @test OffsetTable(OffsetTables.probabilities(ot)) == ot
+            # @test OffsetTable(OffsetTables.probabilities(float, ot)) == ot
+
+            if i == 1
+                p2 = [typemax(UInt)]
+            else
+                p2 = floor.(UInt, (typemax(UInt)/sum(p)) .* p)
+                p2[end] = typemax(UInt) - sum(p2[1:end-1]) + 1
+            end
+            ot2 = OffsetTable(p2)
+            @test OffsetTables.probabilities(ot2) == p2
+            @test OffsetTables.probabilities(float, ot2) ≈  p ./ sum(p)
+            # @test OffsetTable(OffsetTables.probabilities(float, ot2)) == ot2
+            @test OffsetTable(OffsetTables.probabilities(ot2)) == ot2
+        end
+    end
+
     @testset "Equality and hashing" begin
         a = OffsetTable([1, 2, 3])
         b = OffsetTable([1, 2, 3, 0, 0])

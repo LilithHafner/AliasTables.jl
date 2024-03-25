@@ -147,7 +147,14 @@ function probabilities(ot::OffsetTable{T}) where T
         probs[i + offset] += prob
         probs[i] += points_per_cell - prob
     end
-    resize!(probs, findlast(!iszero, probs))
+    li = findlast(!iszero, probs)
+    if li != nothing
+        resize!(probs, li)
+    else # overflow
+        resize!(probs, sample(zero(T), ot))
+        probs[end] = typemax(T)
+    end
+    probs
 end
 
 probabilities(::typeof(float), ot::OffsetTable{T}) where T =
