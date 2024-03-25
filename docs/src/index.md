@@ -68,9 +68,9 @@ julia> values(ans) .* 16/2^16
   5.0
 ```
 
-- [`OffsetTable`](@ref `OffsetTable`)
-- [`OffsetTables.sample(::Random.AbstractRNG, ::OffsetTable)`](@ref `OffsetTables.sample(::Random.AbstractRNG, ::OffsetTable)`)
-- [`OffsetTables.sample(::T, ::OffsetTable{T})`](@ref `OffsetTables.sample(::T, ::OffsetTable{T, I})`)
+- [`OffsetTable`](@ref)
+- [`OffsetTables.sample(::Random.AbstractRNG, ::OffsetTable)`](@ref OffsetTables.sample(::Random.AbstractRNG, ::OffsetTable))
+- [`OffsetTables.sample(::T, ::OffsetTable{T}) where T`](@ref OffsetTables.sample(::T, ::OffsetTable{T, I}) where {T, I})
 
 ```@docs
 OffsetTable
