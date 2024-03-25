@@ -1,7 +1,7 @@
 name = "OffsetTables"
 uuid = "66dad0bd-aa9a-41b7-9441-69ab47430ed8"
 authors = ["Lilith Orion Hafner <lilithhafner@gmail.com> and contributors"]
-version = "0.0.0"
+version = "0.0.1"
 
 [deps]
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
