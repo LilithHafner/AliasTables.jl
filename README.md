@@ -7,6 +7,8 @@
 [![PkgEval](https://JuliaCI.github.io/NanosoldierReports/pkgeval_badges/O/OffsetTables.svg)](https://JuliaCI.github.io/NanosoldierReports/pkgeval_badges/O/OffsetTables.html)
 [![Aqua](https://raw.githubusercontent.com/JuliaTesting/Aqua.jl/master/badge.svg)](https://github.com/JuliaTesting/Aqua.jl)
 
+Requires Julia 1.11+
+
 OffsetTables provides the `OffsetTable` type, which is an object that defines a probability
 distribution over `1:n` for some `n`. They are efficient to construct and very efficient to
 sample from.
