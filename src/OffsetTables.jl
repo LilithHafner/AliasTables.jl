@@ -6,7 +6,7 @@ export OffsetTable
 public sample
 
 """
-    OffsetTable{T<:Unsigned=UInt, I<:Integer=Int}(weights::AbstractVector{<:Real}, normalize=true)
+    OffsetTable{T<:Unsigned=UInt, I<:Integer=Int}(weights::AbstractVector{<:Real}; normalize=true)
 
 An efficient data structure for sampling from a discrete distribution.
 
@@ -26,7 +26,7 @@ sum will result in an error unless exactly one weight is non-zero, in which case
 not checked and the `OffsetTable` represents a constant distribution which always produces
 the index of the nonzero weight.
 """
-struct OffsetTable{T, I}
+struct OffsetTable{T <: Unsigned, I <: Integer}
     probability_offset::Memory{Tuple{T, I}}
     """
         _OffsetTable(probability_offset::Memory{Tuple{T, I}})
@@ -46,13 +46,17 @@ struct OffsetTable{T, I}
     global _OffsetTable
 end
 
-OffsetTable(weights::AbstractVector{<:Real}) = OffsetTable{UInt, Int}(weights)
-OffsetTable(weights::AbstractVector{T}) where T <: Unsigned = OffsetTable{T, Int}(weights)
-
-OffsetTable{T}(weights::AbstractVector{<:Real}) where T = OffsetTable{T, Int}(weights)
-
-OffsetTable{T, I}(weights::AbstractVector{<:Real}) where {T, I} = _offset_table(I, normalize_to_uint(T, weights))
-OffsetTable{T, I}(weights::AbstractVector{T}) where {T<:Real, I} = _offset_table(I, weights)
+OffsetTable(weights::AbstractVector{<:Real}; normalize=true) = OffsetTable{UInt, Int}(weights; normalize)
+OffsetTable{T}(weights::AbstractVector{<:Real}; normalize=true) where T <: Unsigned = OffsetTable{T, Int}(weights; normalize)
+function OffsetTable{T, I}(weights::AbstractVector{<:Real}; normalize=true) where {T <: Unsigned, I <: Integer}
+    Base.require_one_based_indexing(weights)
+    isempty(weights) && throw(ArgumentError("weights must be non-empty"))
+    if normalize
+        _offset_table(T, I, normalize_to_uint(T, weights))
+    else
+        _offset_table(T, I, weights)
+    end
+end
 
 struct WithZeros{T, P <: AbstractVector{T}} <: AbstractVector{T}
     parent::P
@@ -91,12 +95,7 @@ function get_only_nonzero(weights)
     only_nonzero
 end
 
-function _offset_table(::Type{I}, weights::AbstractVector{<:Unsigned}) where I
-    T = eltype(weights)
-    Base.require_one_based_indexing(weights)
-
-    isempty(weights) && throw(ArgumentError("weights must be non-empty"))
-
+function _offset_table(::Type{T}, ::Type{I}, weights::AbstractVector{<:Unsigned}) where {I, T}
     onz = get_only_nonzero(weights)
     onz == -2 || return _constant_offset_table(I, T, onz)
 
@@ -257,19 +256,42 @@ end
 
 ## Mediocre float handling
 
-function normalize_to_uint(::Type{T}, v::AbstractVector{<:Real}) where {T <: Unsigned}
-    isempty(v) && throw(ArgumentError("weights must be non-empty"))
+maybe_unsigned(x) = x # this is necessary to avoid calling unsigned on BigInt, Flaot64, etc.
+maybe_unsigned(x::Base.BitSigned) = unsigned(x)
 
-    onz = get_only_nonzero(v)
-    if onz != -2
+maybe_add_with_overflow(x::Base.BitInteger, y::Base.BitInteger) = Base.Checked.add_with_overflow(x, convert(typeof(x), y))
+maybe_add_with_overflow(x, y) = x+y, false
+
+function normalize_to_uint(::Type{T}, v::AbstractVector{<:Real}) where {T <: Unsigned}
+    only_nonzero = -1
+    sm = maybe_unsigned(Base.add_sum(zero(eltype(v)), zero(eltype(v))))
+    overflow = false
+    for (i, w) in enumerate(v)
+        if only_nonzero != 0 && w > 0
+            if only_nonzero == -1
+                only_nonzero = i
+            else
+                only_nonzero = 0
+            end
+        elseif w < 0
+            throw(ArgumentError("found negative weight $w at index $i"))
+        end
+        sm, o = maybe_add_with_overflow(sm, w)
+        sm != 0 && o && throw(ArgumentError("sum(weights) overflows"))
+        overflow |= o
+    end
+    only_nonzero == -1 && throw(ArgumentError("all weights are zero"))
+    if only_nonzero != 0
         res = zeros(T, length(v))
-        res[onz] = 1
+        res[only_nonzero] = 1
         return res
     end
+    overflow && typemax(T) == typemax(eltype(v)) && return v
+    overflow && throw(ArgumentError("sum(weights) overflows"))
 
     length(v) <= 1 && return ones(T, length(v))
-    sm = sum(v)
-    res = [x <= typemax(T) ? floor(T, x) : typemax(T) for x in (ldexp(x/sm, 8sizeof(T)) for x in v)] # TODO: make this lazy & non-allocating
+    sm2 = sm # https://github.com/JuliaLang/julia/issues/15276
+    res = [x <= typemax(T) ? floor(T, x) : typemax(T) for x in (ldexp(x/sm2, 8sizeof(T)) for x in v)] # TODO: make this lazy & non-allocating
 
     count_nonzero = 0
     for x in res
