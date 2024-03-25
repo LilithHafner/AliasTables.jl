@@ -18,7 +18,8 @@ using RegressionTests
         @test rand(OffsetTable([1, 1, 1])) in [1, 2, 3]
         @test_throws MethodError OffsetTable(OffsetTable([1]).probability_offset)
         @test rand(OffsetTable([1e-70, 1])) == 2
-        @test rand(OffsetTable([0, 1]), 3) == [2,2,2]
+        @test rand(OffsetTable([0, 1]), 3)::Vector{Int} == [2,2,2]
+        @test rand(OffsetTable{UInt, Int8}([0, 1]), 3)::Vector{Int8} == [2,2,2]
     end
 
     @testset "Invalid weight error messages" begin

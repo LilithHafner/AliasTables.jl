@@ -137,6 +137,7 @@ end
 ### Random API
 using Random
 Random.rand(rng::Random.AbstractRNG, ot::Random.SamplerTrivial{<:OffsetTable}) = sample(rng, ot.self)
+Random.gentype(::Type{OffsetTable{T, I}}) where {T, I} = I
 
 ### Reconstruct probabilities
 function probabilities(ot::OffsetTable{T}) where T
