@@ -15,10 +15,11 @@ that the number of values maped to a given index of `weights` is proportional to
 at that index.
 
 The mapping can be accessed directly via
-[`OffsetTables.sample(x::T, ot::OffsetTable{T, I})`](@ref) or indirectly by passing a random
-number generator which will be used to generate a random input of type `T` for you via
-[`OffsetTables.sample(rng::Random.AbstractRNG, ot::OffsetTable{T, I})`](@ref) or simply via
-the `Random` API: `rand(ot)`, `rand(rng, ot)`, `rand(ot, dims...)`, etc.
+[`OffsetTables.sample(x::T, ot::OffsetTable{T, I})`](@ref OffsetTables.sample(::T, ::OffsetTable{T, I}) where {T, I})
+or indirectly by passing a random number generator which will be used to generate a
+random input of type `T` for you via
+[`OffsetTables.sample(rng::Random.AbstractRNG, ot::OffsetTable{T, I})`](@ref OffsetTables.sample(::Random.AbstractRNG, ::OffsetTable))
+or simply via the `Random` API: `rand(ot)`, `rand(rng, ot)`, `rand(ot, dims...)`, etc.
 
 Set `normalize = false` for incrased performance when the weights are already normalized to
 sum to exactly the number of values representable by `T` (i.e. `typemax(T)+1`). A different
