@@ -3,7 +3,29 @@ module OffsetTables
 using Random
 
 export OffsetTable
+public sample
 
+"""
+    OffsetTable{T<:Unsigned=UInt, I<:Integer=Int}(weights::AbstractVector{<:Real}, normalize=true)
+
+An efficient data structure for sampling from a discrete distribution.
+
+Maps every value representable by `T` to a value of type `I` in `eachindex(wights)` such
+that the number of values maped to a given index of `weights` is proportional to the value
+at that index.
+
+The mapping can be accessed directly via
+[`OffsetTables.sample(x::T, ot::OffsetTable{T, I})`](@ref) or indirectly by passing a random
+number generator which will be used to generate a random input of type `T` for you via
+[`OffsetTables.sample(rng::Random.AbstractRNG, ot::OffsetTable{T, I})`](@ref) or simply via
+the `Random` API: `rand(ot)`, `rand(rng, ot)`, `rand(ot, dims...)`, etc.
+
+Set `normalize = false` for incrased performance when the weights are already normalized to
+sum to exactly the number of values representable by `T` (i.e. `typemax(T)+1`). A different
+sum will result in an error unless exactly one weight is non-zero, in which case the sum is
+not checked and the `OffsetTable` represents a constant distribution which always produces
+the index of the nonzero weight.
+"""
 struct OffsetTable{T, I}
     probability_offset::Memory{Tuple{T, I}}
     """
@@ -121,10 +143,18 @@ function _offset_table(::Type{I}, weights::AbstractVector{<:Unsigned}) where I
     _OffsetTable(probability_offset)
 end
 
-function sample(rng::Random.AbstractRNG, ot::OffsetTable{T, I}) where {T, I}
-    sample(rand(rng, T), ot)
-end
+"""
+    sample(x::T, ot::OffsetTable{T, I}) -> I
 
+Sample from `ot` using the seed `x`.
+
+If `x` is chosen uniformly at random from the set of all values representable by `T` then
+the output will be a random sample from the distribution represented by `ot`. The mapping is
+deterministic and not pseudo-random so for patterned input `x` the output will be patterned
+as well.
+
+See also [`OffsetTable`](@ref)
+"""
 function sample(x::T, ot::OffsetTable{T, I}) where {T, I}
     count_ones(length(ot.probability_offset)) == 1 || return zero(I) # This should never happen, but it makes the @inbounds safe
     shift = 8sizeof(T) - Base.top_set_bit(length(ot.probability_offset)) + 1
@@ -134,6 +164,19 @@ function sample(x::T, ot::OffsetTable{T, I}) where {T, I}
     # (val < prob ? (offset+cell) : I(cell))::I
     # I((val < prob) * offset + cell)::I
     (((val < prob) * offset + cell)%I)::I
+end
+
+"""
+    sample(rng::Random.AbstractRNG, ot::OffsetTable{T, I}) -> I
+
+Sample from `ot` using randomness drawn from `rng`.
+
+Produces a random sample from the distribution represented by `ot`.
+
+See also [`OffsetTable`](@ref), `Random.rand`
+"""
+function sample(rng::Random.AbstractRNG, ot::OffsetTable{T, I}) where {T, I}
+    sample(rand(rng, T), ot)
 end
 
 ### Random API
