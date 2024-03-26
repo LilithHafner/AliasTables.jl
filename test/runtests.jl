@@ -21,6 +21,8 @@ using RegressionTests
         @test rand(OffsetTable([1e-70, 1])) == 2
         @test rand(OffsetTable([0, 1]), 3)::Vector{Int} == [2,2,2]
         @test rand(OffsetTable{UInt, Int8}([0, 1]), 3)::Vector{Int8} == [2,2,2]
+
+        @test rand(OffsetTavle([typemax(Int)-10, 5, 5, 5])) == 1 # wrong answer due to overflow on normalizations leading to throw on construction
     end
 
     @testset "Invalid weight error messages" begin

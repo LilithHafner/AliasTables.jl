@@ -312,6 +312,151 @@ function normalize_to_uint(::Type{T}, v::AbstractVector{<:Real}) where {T <: Uns
     res
 end
 
+function normalize_to_uint_widen(::Type{T}, v::AbstractVector{<:Integer}) where {T <: Unsigned}
+    T2 = widen(T)
+    den = sum(T2, v)
+    num = T2(typemax(T)) + one(T2)
+    res = Vector{T}(undef, length(v))
+    for (i,x) in enumerate(v)
+        chosen = Base.udiv_int(num*x, den)
+        num -= chosen
+        den -= x
+        res[i] = chosen
+    end
+    res
+end
+
+function normalize_to_uint_dual_overflow(::Type{T}, v::AbstractVector{<:Integer}) where {T <: Unsigned}
+    sm = sum(T, v)
+    q, r = divrem(typemax(T), sm)
+    if r == sm-true
+        q += true
+        r = zero(r)
+    else
+        r += true
+    end
+    # q, r = divrem(typemax(T)+1, sm)
+
+    error = zero(T)
+    res = Vector{T}(undef, length(v))
+    for (i,x) in enumerate(v)
+        tx = T(x)
+        # @show q, r, tx, r*tx
+        error += r*tx # TODO: check overflow
+        carry, error = divrem(error, sm)
+        res[i] = q*tx + carry
+    end
+    res
+end
+
+function mul_hi_lo(x::T, y::T) where T <: Unsigned
+    hbits = 4sizeof(T)
+    lo_mask = T(1) << hbits - 1
+    lo_x = x & lo_mask
+    lo_y = y & lo_mask
+    hi_x = x >> hbits
+    hi_y = y >> hbits
+
+    lo = lo_x * lo_y
+    hi = hi_x * hi_y
+
+    mid = lo_x * hi_y
+    lo += mid << hbits
+    hi += mid >> hbits
+
+    mid = hi_x * lo_y
+    lo += mid << hbits
+    hi += mid >> hbits
+
+    hi, lo
+end
+
+function mul_hi_lo_2(x::T, y::T) where T <: Unsigned
+    hbits = 4sizeof(T)
+    lo_mask = T(1) << hbits - 1
+    lo_x = x & lo_mask
+    lo_y = y & lo_mask
+    hi_x = x >> hbits
+    hi_y = y >> hbits
+
+    hi = hi_x * hi_y
+
+    mid = lo_x * hi_y
+    hi += mid >> hbits
+
+    mid = hi_x * lo_y
+    hi += mid >> hbits
+
+    hi, x*y
+end
+
+function mul_hi_lo_3(x::T, y::T) where T <: Unsigned
+    xy = widemul(x, y)
+    (x >> 8sizeof(T)) % T, x % T
+end
+
+function normalize_to_uint_dual(::Type{T}, v::AbstractVector{<:Integer}) where {T <: Unsigned}
+    sm = sum(T, v)
+    q, r = divrem(typemax(T), sm)
+    if r == sm-true
+        q += true
+        r = zero(r)
+    else
+        r += true
+    end
+    # q, r = divrem(typemax(T)+1, sm)
+
+    error = zero(T)
+    res = Vector{T}(undef, length(v))
+    for (i,x) in enumerate(v)
+        tx = T(x)
+        # @show q, r, tx, r*tx
+        hi, lo = mul_hi_lo_3(r, tx)
+        error += r*tx # TODO: check overflow
+        carry, error = divrem(error, sm)
+        res[i] = q*tx + carry
+    end
+    res
+end
+
+
+function frac_div(x::T, y::T) where T <: Unsigned
+    # @assert x < y
+    # @assert y != 0
+    div(widen(x) << 8sizeof(T), y) % T
+end
+function frac_div_2(x::T, y::T) where T <: Unsigned
+    # @assert x < y
+    # @assert y != 0
+    Base.udiv_int(promote(widen(x) << 8sizeof(T), y)...) % T
+end
+
+function normalize_to_uint_frac_div(::Type{T}, v::AbstractVector{<:Integer}) where {T <: Unsigned}
+    sm = sum(T, v)
+
+    sm2 = zero(T)
+
+    res = Vector{T}(undef, length(v))
+    for (i,x) in enumerate(v)
+        val = frac_div(T(x), sm)
+        sm2 += val
+        res[i] = val
+    end
+
+    for i in sm2:typemax(sm2)
+        res[typemax(sm2)-i+1] += true
+    end
+
+    res
+end
+
+####
+
+# 2-4 passes (skip first two if nomralize = false)
+# Initial sum, check for overflow, negatives, allzero & exactness
+# If not exact, compute the mapped sum and the error there
+# Dual pass for construction
+
 ## Strict (fragile) & efficient float handling
 
 # struct RescaleView{T, P} <: AbstractVector{T}
