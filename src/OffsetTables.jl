@@ -106,38 +106,88 @@ function _offset_table(::Type{T}, ::Type{I}, weights::AbstractVector{<:Unsigned}
 
     probability_offset = Memory{Tuple{T, I}}(undef, len)
 
-    weights_extended = WithZeros(weights, len)
-    thirsty_i = surplus_i = current_i = firstindex(weights_extended)
-    current_desired = weights_extended[current_i]
+    # @show sum(weights)
+    # @show weights
+
+    enum_weights = enumerate(weights)
+    (surplus_i, surplus_desired), surplus_state = (thirsty_i, thirsty_desired), thirsty_state = iterate(enumerate(weights))
+    current_i = surplus_i
+    current_desired = surplus_desired
 
     while true
         # @show current_i, current_desired, points_per_cell
-        if current_desired <= points_per_cell # Surplus
-            excess = points_per_cell - current_desired                     # Assign this many extra points
-            thirsty_i = findnext(>(points_per_cell), weights_extended, thirsty_i+1) # Which is the next available thirsty cell
-            thirsty_i === nothing && break                                 # If there is no thirsty cell, handle below
-            probability_offset[current_i] = (excess, thirsty_i-current_i)  # To the targeted cell
-            current_i = thirsty_i                                          # Now we have to make sure that thristy cell gets exactly what it wants and no more
-            current_desired = weights_extended[current_i] - excess                  # It wants what it wants nad hasn't already been transferred
-        else                                  # Thirsty (strictly)
-            surplus_i = findnext(<=(points_per_cell), weights_extended, surplus_i+1) # Find the next surplus cell
-            surplus_i === nothing && throw(ArgumentError("sum(weights) is too high")) # Lacking points, so unnable to reach the desired weight
-            excess = points_per_cell - weights_extended[surplus_i]                   # Assign this many extra points
-            probability_offset[surplus_i] = (excess, current_i-surplus_i)   # From the cell with surplus to this cell
-            current_desired -= excess                                       # We now don't want as many points (and may even no longer be thristy)
+        if current_desired < points_per_cell # Surplus (strict)
+            while true                                                             # Find the next thirsty cell
+                ix = iterate(enum_weights, thirsty_state)
+                ix === nothing && throw(ArgumentError("sum(weights) is too low"))  # If there is no thirsty cell, there are more points than requsted by weights.
+                (thirsty_i, thirsty_desired), thirsty_state = ix
+                thirsty_desired >= points_per_cell && break
+            end
+            excess = points_per_cell - current_desired                             # Assign this many extra points
+            probability_offset[current_i] = (excess, thirsty_i-current_i)          # To the targeted cell
+            current_i = thirsty_i                                                  # Now we have to make sure that thristy cell gets exactly what it wants and no more
+            current_desired = thirsty_desired - excess                             # It wants what it wants and hasn't already been transferred
+        else                                 # Thirsty (loose)
+            while true                                                             # Find the next surplus cell
+                ix = iterate(enum_weights, surplus_state)
+                ix === nothing && @goto break_outer                                # If there is no surplus cell, handle below
+                (surplus_i, surplus_desired), surplus_state = ix
+                surplus_desired < points_per_cell && break
+            end
+            excess = points_per_cell - surplus_desired                             # Assign this many extra points
+            probability_offset[surplus_i] = (excess, current_i-surplus_i)          # From the cell with surplus to this cell
+            current_desired -= excess                                              # We now don't want as many points (and may even no longer be thristy)
         end
     end
-    if current_desired < points_per_cell # Surplus points, so exceed the desired weight
-        throw(ArgumentError("sum(weights) is too low"))
+    @label break_outer
+    # println()
+
+    # There are no real surplus cells, but there may be synthetic surplus cells to round out
+    # to a power of two. Those synthetic cells have structural weight of 0 so surplus value
+    # of points_per_cell each. There may be remaining thristy cells, and the current cell is
+    # thirsty.
+
+    surplus_state_2 = length(weights)
+
+
+    while true
+        # @show current_i, current_desired, points_per_cell
+        if current_desired < points_per_cell # Surplus (strict)
+            while true                                                             # Find the next thirsty cell
+                ix = iterate(enum_weights, thirsty_state)
+                ix === nothing && throw(ArgumentError("sum(weights) is too low"))  # If there is no thirsty cell, there are more points than requsted by weights.
+                (thirsty_i, thirsty_desired), thirsty_state = ix
+                thirsty_desired >= points_per_cell && break
+            end
+            excess = points_per_cell - current_desired                             # Assign this many extra points
+            probability_offset[current_i] = (excess, thirsty_i-current_i)          # To the targeted cell
+            current_i = thirsty_i                                                  # Now we have to make sure that thristy cell gets exactly what it wants and no more
+            current_desired = thirsty_desired - excess                             # It wants what it wants and hasn't already been transferred
+        else                                 # Thirsty (loose)
+            surplus_state_2 += true # Find the next surplus cell
+            surplus_state_2 > len && break # If there is no surplus cell, handle below
+            surplus_i = surplus_state_2
+            excess = points_per_cell                                               # Assign all the points
+            probability_offset[surplus_i] = (points_per_cell, current_i-surplus_i) # From the synthetic cell with surplus to this cell
+            current_desired -= excess                                              # We now don't want as many points (and may even no longer be thristy)
+        end
+    end
+
+    # @show probability_offset, points_per_cell, current_desired
+
+    if points_per_cell < current_desired  # Strictly thirsty, and no surplus cells, so exceed the desired weight.
+        throw(ArgumentError("sum(weights) is too high"))
     end
     probability_offset[current_i] = (0, 0)
-    # Just right. There are no thristy cells left and no current surplus. All that's left
-    # are future surplus cells, all of which should be a surplus of exactly 0.
-    while true
-        surplus_i = findnext(<=(points_per_cell), weights_extended, surplus_i+1) # Find the next surplus cell
-        surplus_i === nothing && break
-        weights_extended[surplus_i] == points_per_cell || throw(ArgumentError("sum(weights) is too low"))
-        probability_offset[surplus_i] = (0, 0)
+    # Just right. There are no surplus cells left and no current surplus or thirst. All
+    # that's left are future loosely thirsty cells, all of which should be a thirst of
+    # exactly 0.
+    while true         # Loop over all thirsty celss
+        ix = iterate(enum_weights, thirsty_state)
+        ix === nothing && break # Out of thirsty cells, yay!
+        (thirsty_i, thirsty_desired), thirsty_state = ix
+        points_per_cell < thirsty_desired && throw(ArgumentError("sum(weights) is too high")) # Strictly thirsty, with no surplus to draw from.
+        probability_offset[thirsty_i] = (0, 0)
     end
 
     _OffsetTable(probability_offset)
