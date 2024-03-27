@@ -12,7 +12,7 @@ makedocs(;
         repo = "https://github.com/LilithHafner/AliasTables.jl",
         devbranch = "main",
         devurl = "dev",
-        deploy_url = "chairmarks.lilithhafner.com"),
+        deploy_url = "aliastables.lilithhafner.com"),
     pages=[
         "Home" => "index.md",
     ],
