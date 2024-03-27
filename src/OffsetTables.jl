@@ -49,26 +49,28 @@ end
 
 OffsetTable(weights::AbstractVector{<:Real}; normalize=true) = OffsetTable{UInt, Int}(weights; normalize)
 OffsetTable{T}(weights::AbstractVector{<:Real}; normalize=true) where T <: Unsigned = OffsetTable{T, Int}(weights; normalize)
-function OffsetTable{T, I}(weights::AbstractVector{<:Real}; normalize=true) where {T <: Unsigned, I <: Integer}
+function OffsetTable{T, I}(weights; normalize=true) where {T <: Unsigned, I <: Integer}
+    # function _OffsetTable(::Type{T}, ::Type{I}, weights; normalize=true) where {T <: Unsigned, I <: Integer}
     Base.require_one_based_indexing(weights)
-    isempty(weights) && throw(ArgumentError("weights must be non-empty"))
     if normalize
-        _offset_table(T, I, normalize_to_uint(T, weights))
+        (is_constant, sm) = checked_sum(weights)
+        if is_constant
+            _constant_offset_table(T, I, sm)
+        elseif sm == 0 # pre-normalized
+            _offset_table(T, I, weights)
+        else
+            # norm = normalize_to_uint_lazy_frac_div(T, weights, sm)
+            norm = normalize_to_uint_frac_div(T, weights, sm)
+            _offset_table(T, I, norm)
+        end
     else
         _offset_table(T, I, weights)
     end
 end
 
-struct WithZeros{T, P <: AbstractVector{T}} <: AbstractVector{T}
-    parent::P
-    length::Int
-end
-Base.size(wz::WithZeros) = (wz.length,)
-Base.getindex(wz::WithZeros{T}, i) where T = i <= length(wz.parent) ? wz.parent[i] : zero(T)
-
-function _constant_offset_table(::Type{I}, ::Type{T}, index) where {I, T}
+function _constant_offset_table(::Type{T}, ::Type{I}, index) where {I, T}
     bitshift = Base.top_set_bit(index - 1)
-    len = 1 << bitshift#next_or_eq_power_of_two(length(weights))
+    len = 1 << bitshift
     points_per_cell = one(T) << (8*sizeof(T) - bitshift)#typemax(T)+1 / len
 
     probability_offset = Memory{Tuple{T, I}}(undef, len)
@@ -96,48 +98,115 @@ function get_only_nonzero(weights)
     only_nonzero
 end
 
-function _offset_table(::Type{T}, ::Type{I}, weights::AbstractVector{<:Unsigned}) where {I, T}
-    onz = get_only_nonzero(weights)
-    onz == -2 || return _constant_offset_table(I, T, onz)
+"Like Iterators.Take, but faster"
+struct HotTake{T<:Array}
+    xs::T
+    n::Int
+    HotTake(xs::Array, n::Int) = new{typeof(xs)}(xs, min(n, length(xs)))
+end
+Base.iterate(A::HotTake, i=1) = (@inline; (i - 1)%UInt < A.n%UInt ? (@inbounds A.xs[i], i + 1) : nothing)
+Base.length(A::HotTake) = A.n
+hot_take(xs::Array, n) = HotTake(xs, n)
+hot_take(xs, n) = Iterators.take(xs, n)
 
-    bitshift = Base.top_set_bit(findlast(!iszero, weights) - 1)
+function _offset_table(::Type{T}, ::Type{I}, weights0) where {I, T}
+    onz = get_only_nonzero(weights0)
+    onz == -2 || return _constant_offset_table(T, I, onz)
+
+    # weights = Iterators.take(weights0, findlast(!iszero, weights0))
+    weights = hot_take(weights0, findlast(!iszero, weights0))
+    # weights = weights0
+    # while iszero(last(weights))
+        # pop!(weights)
+    # end
+    bitshift = Base.top_set_bit(length(weights) - 1)
     len = 1 << bitshift#next_or_eq_power_of_two(length(weights))
     points_per_cell = one(T) << (8*sizeof(T) - bitshift)#typemax(T)+1 / len
 
     probability_offset = Memory{Tuple{T, I}}(undef, len)
 
-    weights_extended = WithZeros(weights, len)
-    thirsty_i = surplus_i = current_i = firstindex(weights_extended)
-    current_desired = weights_extended[current_i]
+    # @show sum(weights)
+    # @show weights
+
+    enum_weights = enumerate(weights)
+    (surplus_i, surplus_desired), surplus_state = (thirsty_i, thirsty_desired), thirsty_state = iterate(enumerate(weights))
+    current_i = surplus_i
+    current_desired = surplus_desired
 
     while true
         # @show current_i, current_desired, points_per_cell
-        if current_desired <= points_per_cell # Surplus
-            excess = points_per_cell - current_desired                     # Assign this many extra points
-            thirsty_i = findnext(>(points_per_cell), weights_extended, thirsty_i+1) # Which is the next available thirsty cell
-            thirsty_i === nothing && break                                 # If there is no thirsty cell, handle below
-            probability_offset[current_i] = (excess, thirsty_i-current_i)  # To the targeted cell
-            current_i = thirsty_i                                          # Now we have to make sure that thristy cell gets exactly what it wants and no more
-            current_desired = weights_extended[current_i] - excess                  # It wants what it wants nad hasn't already been transferred
-        else                                  # Thirsty (strictly)
-            surplus_i = findnext(<=(points_per_cell), weights_extended, surplus_i+1) # Find the next surplus cell
-            surplus_i === nothing && throw(ArgumentError("sum(weights) is too high")) # Lacking points, so unnable to reach the desired weight
-            excess = points_per_cell - weights_extended[surplus_i]                   # Assign this many extra points
-            probability_offset[surplus_i] = (excess, current_i-surplus_i)   # From the cell with surplus to this cell
-            current_desired -= excess                                       # We now don't want as many points (and may even no longer be thristy)
+        if current_desired < points_per_cell # Surplus (strict)
+            while true                                                             # Find the next thirsty cell
+                ix = iterate(enum_weights, thirsty_state)
+                ix === nothing && throw(ArgumentError("sum(weights) is too low"))  # If there is no thirsty cell, there are more points than requsted by weights.
+                (thirsty_i, thirsty_desired), thirsty_state = ix
+                thirsty_desired >= points_per_cell && break
+            end
+            excess = points_per_cell - current_desired                             # Assign this many extra points
+            probability_offset[current_i] = (excess, thirsty_i-current_i)          # To the targeted cell
+            current_i = thirsty_i                                                  # Now we have to make sure that thristy cell gets exactly what it wants and no more
+            current_desired = thirsty_desired - excess                             # It wants what it wants and hasn't already been transferred
+        else                                 # Thirsty (loose)
+            while true                                                             # Find the next surplus cell
+                ix = iterate(enum_weights, surplus_state)
+                ix === nothing && @goto break_outer                                # If there is no surplus cell, handle below
+                (surplus_i, surplus_desired), surplus_state = ix
+                surplus_desired < points_per_cell && break
+            end
+            excess = points_per_cell - surplus_desired                             # Assign this many extra points
+            probability_offset[surplus_i] = (excess, current_i-surplus_i)          # From the cell with surplus to this cell
+            current_desired -= excess                                              # We now don't want as many points (and may even no longer be thristy)
         end
     end
-    if current_desired < points_per_cell # Surplus points, so exceed the desired weight
-        throw(ArgumentError("sum(weights) is too low"))
+    @label break_outer
+    # println()
+
+    # There are no real surplus cells, but there may be synthetic surplus cells to round out
+    # to a power of two. Those synthetic cells have structural weight of 0 so surplus value
+    # of points_per_cell each. There may be remaining thristy cells, and the current cell is
+    # thirsty.
+
+    surplus_state_2 = length(weights)
+
+
+    while true
+        # @show current_i, current_desired, points_per_cell
+        if current_desired < points_per_cell # Surplus (strict)
+            while true                                                             # Find the next thirsty cell
+                ix = iterate(enum_weights, thirsty_state)
+                ix === nothing && throw(ArgumentError("sum(weights) is too low"))  # If there is no thirsty cell, there are more points than requsted by weights.
+                (thirsty_i, thirsty_desired), thirsty_state = ix
+                thirsty_desired >= points_per_cell && break
+            end
+            excess = points_per_cell - current_desired                             # Assign this many extra points
+            probability_offset[current_i] = (excess, thirsty_i-current_i)          # To the targeted cell
+            current_i = thirsty_i                                                  # Now we have to make sure that thristy cell gets exactly what it wants and no more
+            current_desired = thirsty_desired - excess                             # It wants what it wants and hasn't already been transferred
+        else                                 # Thirsty (loose)
+            surplus_state_2 += true # Find the next surplus cell
+            surplus_state_2 > len && break # If there is no surplus cell, handle below
+            surplus_i = surplus_state_2
+            excess = points_per_cell                                               # Assign all the points
+            probability_offset[surplus_i] = (points_per_cell, current_i-surplus_i) # From the synthetic cell with surplus to this cell
+            current_desired -= excess                                              # We now don't want as many points (and may even no longer be thristy)
+        end
+    end
+
+    # @show probability_offset, points_per_cell, current_desired
+
+    if points_per_cell < current_desired  # Strictly thirsty, and no surplus cells, so exceed the desired weight.
+        throw(ArgumentError("sum(weights) is too high"))
     end
     probability_offset[current_i] = (0, 0)
-    # Just right. There are no thristy cells left and no current surplus. All that's left
-    # are future surplus cells, all of which should be a surplus of exactly 0.
-    while true
-        surplus_i = findnext(<=(points_per_cell), weights_extended, surplus_i+1) # Find the next surplus cell
-        surplus_i === nothing && break
-        weights_extended[surplus_i] == points_per_cell || throw(ArgumentError("sum(weights) is too low"))
-        probability_offset[surplus_i] = (0, 0)
+    # Just right. There are no surplus cells left and no current surplus or thirst. All
+    # that's left are future loosely thirsty cells, all of which should be a thirst of
+    # exactly 0.
+    while true         # Loop over all thirsty celss
+        ix = iterate(enum_weights, thirsty_state)
+        ix === nothing && break # Out of thirsty cells, yay!
+        (thirsty_i, thirsty_desired), thirsty_state = ix
+        points_per_cell < thirsty_desired && throw(ArgumentError("sum(weights) is too high")) # Strictly thirsty, with no surplus to draw from.
+        points_per_cell == thirsty_desired && (probability_offset[thirsty_i] = (0, 0)) # loosely thirsty, but satisfied. Zero out the undef.
     end
 
     _OffsetTable(probability_offset)
@@ -255,7 +324,7 @@ function Base.hash(ot::OffsetTable, h::UInt)
     hash(MapVector{typeof(norm(po1)), typeof(norm), typeof(ot.probability_offset)}(ot.probability_offset, norm), h)
 end
 
-## Mediocre float handling
+## Normalization
 
 maybe_unsigned(x) = x # this is necessary to avoid calling unsigned on BigInt, Flaot64, etc.
 maybe_unsigned(x::Base.BitSigned) = unsigned(x)
@@ -312,71 +381,103 @@ function normalize_to_uint(::Type{T}, v::AbstractVector{<:Real}) where {T <: Uns
     res
 end
 
-## Strict (fragile) & efficient float handling
+function frac_div(x::T, y::T) where T <: Unsigned
+    # @assert x < y
+    # @assert y != 0
+    div(widen(x) << 8sizeof(T), y) % T
+end
 
-# struct RescaleView{T, P} <: AbstractVector{T}
-#     parent::P
+####
+
+# 2-4 passes (skip first two if nomralize = false)
+# Initial sum, check for overflow, negatives, allzero & exactness
+# If not exact, compute the mapped sum and the error there
+# Dual pass for construction
+
+# First pass
+widen_to_word(x) = x
+widen_to_word(x::Base.BitSignedSmall) = Int(x)
+widen_to_word(x::Base.BitUnsignedSmall) = Int(x)
+sum_prepare(x) = maybe_unsigned(widen_to_word(x))
+
+function checked_sum(weights)
+    xi = iterate(weights)
+    xi === nothing && throw(ArgumentError("weights must be non-empty"))
+    x, i = xi
+    nonzero_index = 1
+    while iszero(x)
+        nonzero_index += 1
+        xi = iterate(weights, i)
+        xi === nothing && throw(ArgumentError("all weights are zero"))
+        x, i = xi
+    end
+    x < 0 && throw(ArgumentError("found negative weight $x"))
+    x0 = x
+    while true
+        xi = iterate(weights, i)
+        xi === nothing && return (true, nonzero_index)
+        x, i = xi
+        iszero(x) || break
+    end
+    # There are two nonzero elements
+    x < 0 && throw(ArgumentError("found negative weight $x"))
+    sm, overflow = maybe_add_with_overflow(sum_prepare(x0), sum_prepare(x))
+    overflow && !iszero(sm) && throw(ArgumentError("sum(weights) overflows"))
+    while true
+        xi = iterate(weights, i)
+        xi === nothing && break
+        x, i = xi
+        x < 0 && throw(ArgumentError("found negative weight $x"))
+        sm, o = maybe_add_with_overflow(sm, sum_prepare(x))
+        overflow |= o
+        overflow && !iszero(sm) && throw(ArgumentError("sum(weights) overflows"))
+    end
+    isfinite(sm) || throw(ArgumentError("sum(weights) == $sm which is not finite"))
+    (false, sm)
+end
+
+# Second phase
+
+# Slower than allocating:
+# function normalize_to_uint_lazy_frac_div(::Type{T}, weights, sm) where T <: Unsigned
+#     sm2 = zero(T)
+#     for x in weights
+#         sm2 += frac_div(T(x), sm)
+#     end
+#     sm2_copy = sm2 # lolz https://github.com/JuliaLang/julia/issues/15276
+
+#     bonus = typemax(sm2)-sm2+1
+#     (frac_div(T(x), sm) + (i <= bonus) for (i,x) in enumerate(weights))
 # end
-# Base.getindex(rv::RescaleView{T}, i) where T = T(ldexp(rv.parent[i], 8*sizeof(T)))
-# Base.size(rv::RescaleView) = size(rv.parent)
-# OffsetTable{T, I}(weights::AbstractVector{<:Real}) where {T, I} = _offset_table(I, RescaleView{T, typeof(weights)}(weights))
 
-## Better float handling (wip)
+function normalize_to_uint_frac_div(::Type{T}, v, sm=sum(T,v)) where {T <: Unsigned}
+    if sm isa AbstractFloat
+        shift = 8sizeof(T)-exponent(sm + sqrt(eps(sm)))-1
+        v2 = res = [floor(T, ldexp(x, shift)) for x in v]
+        onz = get_only_nonzero(v2)
+        onz != -2 && return res
+        sm2 = sum(res)
+    else
+        v2 = v
+        res = Vector{T}(undef, length(v))
+        sm2 = sm
+    end
 
-# function offset_table_float(::Type{T}, ::Type{I}, weights::AbstractVector{<:Real}) where {T <: Unsigned, I <: Integer}
-#     Base.require_one_based_indexing(weights)
+    sm3 = zero(T)
 
-#     bitshift = Base.top_set_bit(length(weights) - 1)
-#     len = 1 << bitshift#next_or_eq_power_of_two(length(weights))
-#     points_per_cell = one(T) << (8*sizeof(T) - bitshift)#typemax(T)+1 / len
+    for (i,x) in enumerate(v2)
+        val = frac_div(T(x), T(sm2))
+        sm3 += val
+        res[i] = val
+    end
 
-#     thirsty_i = surplus_i = current_i = firstindex(weights)
-#     current_desired = weights[current_i]
+    sm3 == 0 && return res
 
-#     exp = exponent(sum(weights))
-#     real_to_uint(x) = floor(T, ldexp(x, 8sizeof(T)-exp))
-#     # sum(real_to_uint, weights) could be as low as 0 if weights = fill(1, 2^33) and T=UInt32, though in that case we can assign every bin either 0 or 1 point at will
-#     # it could be equal to typemax(T)+1 if weights = [1] or there is otherwise no rounding down.
-#     sm = sum(widen ∘ real_to_uint, weights)
+    for i in sm3:typemax(sm3)
+        res[typemax(sm3)-i+1] += true
+    end
 
-
-
-#     probability_offset = Memory{Tuple{T, I}}(undef, len)
-
-
-#     while true
-#         # @show current_i, current_desired, points_per_cell
-#         if current_desired <= points_per_cell # Surplus
-#             excess = points_per_cell - current_desired                     # Assign this many extra points
-#             thirsty_i = findnext(>(points_per_cell), weights, thirsty_i+1) # Which is the next available thirsty cell
-#             thirsty_i === nothing && break                                 # If there is no thirsty cell, handle below
-#             probability_offset[current_i] = (excess, thirsty_i-current_i)  # To the targeted cell
-#             current_i = thirsty_i                                          # Now we have to make sure that thristy cell gets exactly what it wants and no more
-#             current_desired = weights[current_i] - excess                  # It wants what it wants nad hasn't already been transferred
-#         else                                  # Thirsty (strictly)
-#             surplus_i = findnext(<=(points_per_cell), weights, surplus_i+1) # Find the next surplus cell
-#             surplus_i === nothing && throw(ArgumentError("sum(weights) is too high")) # Lacking points, so unnable to reach the desired weight
-#             excess = weights[surplus_i] - points_per_cell                   # Assign this many extra points
-#             probability_offset[surplus_i] = (excess, current_i-surplus_i)   # From the cell with surplus to this cell
-#             current_desired -= excess                                       # We now don't want as many points (and may even no longer be thristy)
-#         end
-#     end
-#     if current_desired < points_per_cell # Surplus points, so exceed the desired weight
-#         throw(ArgumentError("sum(weights) is too low"))
-#     end
-#     probability_offset[current_i] = (0, 0)
-#     # Just right. There are no thristy cells left and no current surplus. All that's left
-#     # are future surplus cells, all of which should be a surplus of exactly 0.
-#     while true
-#         surplus_i = findnext(<=(points_per_cell), weights, surplus_i+1) # Find the next surplus cell
-#         surplus_i === nothing && break
-#         weights[surplus_i] == points_per_cell || throw(ArgumentError("sum(weights) is too low"))
-#         probability_offset[surplus_i] = (0, 0)
-#     end
-
-#     OffsetTable(probability_offset)
-# end
-
-
+    res
+end
 
 end

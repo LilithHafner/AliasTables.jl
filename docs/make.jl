@@ -5,7 +5,6 @@ using DocumenterVitepress
 DocMeta.setdocmeta!(OffsetTables, :DocTestSetup, :(using OffsetTables); recursive=true)
 
 makedocs(;
-    modules=[OffsetTables],
     authors="Lilith Orion Hafner <lilithhafner@gmail.com> and contributors",
     repo=Remotes.GitHub("LilithHafner", "OffsetTables.jl"),
     sitename="OffsetTables.jl",
