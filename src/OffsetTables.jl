@@ -98,11 +98,27 @@ function get_only_nonzero(weights)
     only_nonzero
 end
 
-function _offset_table(::Type{T}, ::Type{I}, weights) where {I, T}
-    onz = get_only_nonzero(weights)
+"Like Iterators.Take, but faster"
+struct HotTake{T<:Array}
+    xs::T
+    n::Int
+    HotTake(xs::Array, n::Int) = new{typeof(xs)}(xs, min(n, length(xs)))
+end
+Base.iterate(A::HotTake, i=1) = (@inline; (i - 1)%UInt < A.n%UInt ? (@inbounds A.xs[i], i + 1) : nothing)
+Base.length(A::HotTake) = A.n
+hot_take(xs::Array, n) = HotTake(xs, n)
+hot_take(xs, n) = Iterators.take(xs, n)
+
+function _offset_table(::Type{T}, ::Type{I}, weights0) where {I, T}
+    onz = get_only_nonzero(weights0)
     onz == -2 || return _constant_offset_table(T, I, onz)
 
-    weights = Iterators.take(weights, findlast(!iszero, weights))
+    # weights = Iterators.take(weights0, findlast(!iszero, weights0))
+    weights = hot_take(weights0, findlast(!iszero, weights0))
+    # weights = weights0
+    # while iszero(last(weights))
+        # pop!(weights)
+    # end
     bitshift = Base.top_set_bit(length(weights) - 1)
     len = 1 << bitshift#next_or_eq_power_of_two(length(weights))
     points_per_cell = one(T) << (8*sizeof(T) - bitshift)#typemax(T)+1 / len
