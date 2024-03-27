@@ -49,15 +49,15 @@ end
 
 OffsetTable(weights::AbstractVector{<:Real}; normalize=true) = OffsetTable{UInt, Int}(weights; normalize)
 OffsetTable{T}(weights::AbstractVector{<:Real}; normalize=true) where T <: Unsigned = OffsetTable{T, Int}(weights; normalize)
-function OffsetTable{T, I}(weights::AbstractVector{<:Real}; normalize=true) where {T <: Unsigned, I <: Integer}
-    Base.require_one_based_indexing(weights)
-    isempty(weights) && throw(ArgumentError("weights must be non-empty"))
-    if normalize
-        _offset_table(T, I, normalize_to_uint(T, weights))
-    else
-        _offset_table(T, I, weights)
-    end
-end
+# function OffsetTable{T, I}(weights::AbstractVector{<:Real}; normalize=true) where {T <: Unsigned, I <: Integer}
+#     Base.require_one_based_indexing(weights)
+#     isempty(weights) && throw(ArgumentError("weights must be non-empty"))
+#     if normalize
+#         _offset_table(T, I, normalize_to_uint(T, weights))
+#     else
+#         _offset_table(T, I, weights)
+#     end
+# end
 
 struct WithZeros{T, P <: AbstractVector{T}} <: AbstractVector{T}
     parent::P
@@ -66,7 +66,7 @@ end
 Base.size(wz::WithZeros) = (wz.length,)
 Base.getindex(wz::WithZeros{T}, i) where T = i <= length(wz.parent) ? wz.parent[i] : zero(T)
 
-function _constant_offset_table(::Type{I}, ::Type{T}, index) where {I, T}
+function _constant_offset_table(::Type{T}, ::Type{I}, index) where {I, T}
     bitshift = Base.top_set_bit(index - 1)
     len = 1 << bitshift#next_or_eq_power_of_two(length(weights))
     points_per_cell = one(T) << (8*sizeof(T) - bitshift)#typemax(T)+1 / len
@@ -96,11 +96,12 @@ function get_only_nonzero(weights)
     only_nonzero
 end
 
-function _offset_table(::Type{T}, ::Type{I}, weights::AbstractVector{<:Unsigned}) where {I, T}
+function _offset_table(::Type{T}, ::Type{I}, weights) where {I, T}
     onz = get_only_nonzero(weights)
-    onz == -2 || return _constant_offset_table(I, T, onz)
+    onz == -2 || return _constant_offset_table(T, I, onz)
 
-    bitshift = Base.top_set_bit(findlast(!iszero, weights) - 1)
+    weights = Iterators.take(weights, findlast(!iszero, weights))
+    bitshift = Base.top_set_bit(length(weights) - 1)
     len = 1 << bitshift#next_or_eq_power_of_two(length(weights))
     points_per_cell = one(T) << (8*sizeof(T) - bitshift)#typemax(T)+1 / len
 
@@ -187,7 +188,7 @@ function _offset_table(::Type{T}, ::Type{I}, weights::AbstractVector{<:Unsigned}
         ix === nothing && break # Out of thirsty cells, yay!
         (thirsty_i, thirsty_desired), thirsty_state = ix
         points_per_cell < thirsty_desired && throw(ArgumentError("sum(weights) is too high")) # Strictly thirsty, with no surplus to draw from.
-        probability_offset[thirsty_i] = (0, 0)
+        points_per_cell == thirsty_desired && (probability_offset[thirsty_i] = (0, 0)) # loosely thirsty, but satisfied. Zero out the undef.
     end
 
     _OffsetTable(probability_offset)
@@ -475,26 +476,38 @@ function frac_div(x::T, y::T) where T <: Unsigned
     # @assert y != 0
     div(widen(x) << 8sizeof(T), y) % T
 end
+frac_div(x, y) = frac_div(promote(x, y)...)
 function frac_div_2(x::T, y::T) where T <: Unsigned
     # @assert x < y
     # @assert y != 0
     Base.udiv_int(promote(widen(x) << 8sizeof(T), y)...) % T
 end
 
-function normalize_to_uint_frac_div(::Type{T}, v::AbstractVector{<:Integer}) where {T <: Unsigned}
-    sm = sum(T, v)
+function normalize_to_uint_frac_div(::Type{T}, v, sm=sum(T,v)) where {T <: Unsigned}
+    if sm isa AbstractFloat
+        shift = 8sizeof(T)-exponent(sm + sqrt(eps(sm)))-1
+        v2 = res = [floor(T, ldexp(x, shift)) for x in v]
+        onz = get_only_nonzero(v2)
+        onz != -2 && return res
+        sm2 = sum(res)
+    else
+        v2 = v
+        res = Vector{T}(undef, length(v))
+        sm2 = sm
+    end
 
-    sm2 = zero(T)
+    sm3 = zero(T)
 
-    res = Vector{T}(undef, length(v))
-    for (i,x) in enumerate(v)
-        val = frac_div(T(x), sm)
-        sm2 += val
+    for (i,x) in enumerate(v2)
+        val = frac_div(T(x), T(sm2))
+        sm3 += val
         res[i] = val
     end
 
-    for i in sm2:typemax(sm2)
-        res[typemax(sm2)-i+1] += true
+    sm3 == 0 && return res
+
+    for i in sm3:typemax(sm3)
+        res[typemax(sm3)-i+1] += true
     end
 
     res
@@ -506,6 +519,85 @@ end
 # Initial sum, check for overflow, negatives, allzero & exactness
 # If not exact, compute the mapped sum and the error there
 # Dual pass for construction
+
+# First pass
+widen_to_word(x) = x
+widen_to_word(x::Base.BitSignedSmall) = Int(x)
+widen_to_word(x::Base.BitUnsignedSmall) = Int(x)
+sum_prepare(x) = maybe_unsigned(widen_to_word(x))
+
+function checked_sum(weights)
+    xi = iterate(weights)
+    xi === nothing && throw(ArgumentError("weights must be non-empty"))
+    x, i = xi
+    nonzero_index = 1
+    while iszero(x)
+        nonzero_index += 1
+        xi = iterate(weights, i)
+        xi === nothing && throw(ArgumentError("all weights are zero"))
+        x, i = xi
+    end
+    x < 0 && throw(ArgumentError("found negative weight $x"))
+    x0 = x
+    while true
+        xi = iterate(weights, i)
+        xi === nothing && return (true, nonzero_index)
+        x, i = xi
+        iszero(x) || break
+    end
+    # There are two nonzero elements
+    x < 0 && throw(ArgumentError("found negative weight $x"))
+    sm, overflow = maybe_add_with_overflow(sum_prepare(x0), sum_prepare(x))
+    overflow && !iszero(sm) && throw(ArgumentError("sum(weights) overflows"))
+    while true
+        xi = iterate(weights, i)
+        xi === nothing && break
+        x, i = xi
+        x < 0 && throw(ArgumentError("found negative weight $x"))
+        sm, o = maybe_add_with_overflow(sm, sum_prepare(x))
+        overflow |= o
+        overflow && !iszero(sm) && throw(ArgumentError("sum(weights) overflows"))
+    end
+    isfinite(sm) || throw(ArgumentError("sum(weights) == $sm which is not finite"))
+    (false, sm)
+end
+
+# Second phase
+function normalize_to_uint_lazy_frac_div(::Type{T}, weights, sm) where T <: Unsigned
+    sm2 = zero(T)
+    for x in weights
+        sm2 += frac_div(T(x), sm)
+    end
+    sm2_copy = sm2 # lolz https://github.com/JuliaLang/julia/issues/15276
+
+    bonus = typemax(sm2)-sm2+1
+    (frac_div(T(x), sm) + (i <= bonus) for (i,x) in enumerate(weights))
+end
+
+# Coordinator
+function OffsetTable{T, I}(weights; normalize=true) where {T <: Unsigned, I <: Integer}
+# function _OffsetTable(::Type{T}, ::Type{I}, weights; normalize=true) where {T <: Unsigned, I <: Integer}
+    Base.require_one_based_indexing(weights)
+    if normalize
+        (is_constant, sm) = checked_sum(weights)
+        if is_constant
+            _constant_offset_table(T, I, sm)
+        elseif sm == 0 # pre-normalized
+            _offset_table(T, I, weights)
+        else
+            # norm = normalize_to_uint_lazy_frac_div(T, weights, sm)
+            norm = normalize_to_uint_frac_div(T, weights, sm)
+            _offset_table(T, I, norm)
+        end
+    else
+        # onz = get_only_nonzero(weights)
+        # if onz != -2
+            # _constant_offset_table(T, I, onz)
+        # else
+            _offset_table(T, I, weights)
+        # end
+    end
+end
 
 ## Strict (fragile) & efficient float handling
 

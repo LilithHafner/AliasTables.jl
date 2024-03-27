@@ -21,13 +21,12 @@ using RegressionTests
         @test rand(OffsetTable([1e-70, 1])) == 2
         @test rand(OffsetTable([0, 1]), 3)::Vector{Int} == [2,2,2]
         @test rand(OffsetTable{UInt, Int8}([0, 1]), 3)::Vector{Int8} == [2,2,2]
-
-        @test rand(OffsetTable([typemax(Int)-10, 5, 5, 5])) == 1 # wrong answer due to overflow on normalizations leading to throw on construction
+        @test rand(OffsetTable([typemax(Int)-10, 5, 5, 5])) == 1
     end
 
     @testset "Invalid weight error messages" begin
-        @test_throws ArgumentError("found negative weight -1 at index 2") OffsetTable([1, -1])
-        @test_throws ArgumentError("found negative weight -1 at index 3") OffsetTable([1, 1, -1])
+        @test_throws ArgumentError("found negative weight -1") OffsetTable([1, -1])
+        @test_throws ArgumentError("found negative weight -1") OffsetTable([1, 1, -1])
         @test_throws ArgumentError("all weights are zero") OffsetTable([0, 0])
         @test_throws ArgumentError("all weights are zero") OffsetTable([0])
         @test_throws ArgumentError("all weights are zero") OffsetTable(UInt[0, 0])
@@ -51,6 +50,7 @@ using RegressionTests
         for i in 1:100
             p = rand(i)
             ot = OffsetTable(p)
+            @test maximum(abs, OffsetTables.probabilities(ot) ./ (big(typemax(UInt))+1) .- p ./ sum(big, p)) ≤ .5^64
             @test OffsetTables.probabilities(float, ot) ≈  p ./ sum(p)
             @test OffsetTable(OffsetTables.probabilities(ot)) == ot
             # @test OffsetTable(OffsetTables.probabilities(float, ot)) == ot
@@ -62,6 +62,7 @@ using RegressionTests
                 p2[end] = typemax(UInt) - sum(p2[1:end-1]) + 1
             end
             ot2 = OffsetTable(p2)
+            @test maximum(abs, OffsetTables.probabilities(ot2) ./ (big(typemax(UInt))+1) .- p2 ./ sum(big, p2)) ≤ .5^64
             @test OffsetTables.probabilities(ot2) == p2
             @test OffsetTables.probabilities(float, ot2) ≈  p ./ sum(p)
             # @test OffsetTable(OffsetTables.probabilities(float, ot2)) == ot2
