@@ -1,59 +1,59 @@
-using OffsetTables
+using AliasTables
 using Test
 using Aqua
 using Random
 using RegressionTests
 
-@testset "OffsetTables.jl" begin
+@testset "AliasTables.jl" begin
     @testset "Code quality (Aqua.jl)" begin
-        Aqua.test_all(OffsetTables, deps_compat=false)
-        Aqua.test_deps_compat(OffsetTables, check_extras=false)
+        Aqua.test_all(AliasTables, deps_compat=false)
+        Aqua.test_deps_compat(AliasTables, check_extras=false)
     end
 
     @testset "Basic" begin
-        @test rand(OffsetTable([1])) == 1
-        @test_throws ArgumentError OffsetTable([0])
-        @test_throws ArgumentError OffsetTable(Int[])
-        @test rand(OffsetTable([1, 1])) in [1, 2]
-        @test rand(OffsetTable([1, 0])) == 1
-        @test rand(OffsetTable([1, 1, 1])) in [1, 2, 3]
-        @test_throws MethodError OffsetTable(OffsetTable([1]).probability_offset)
-        @test rand(OffsetTable([1e-70, 1])) == 2
-        @test rand(OffsetTable([0, 1]), 3)::Vector{Int} == [2,2,2]
-        @test rand(OffsetTable{UInt, Int8}([0, 1]), 3)::Vector{Int8} == [2,2,2]
-        @test rand(OffsetTable([typemax(Int)-10, 5, 5, 5])) == 1
+        @test rand(AliasTable([1])) == 1
+        @test_throws ArgumentError AliasTable([0])
+        @test_throws ArgumentError AliasTable(Int[])
+        @test rand(AliasTable([1, 1])) in [1, 2]
+        @test rand(AliasTable([1, 0])) == 1
+        @test rand(AliasTable([1, 1, 1])) in [1, 2, 3]
+        @test_throws MethodError AliasTable(AliasTable([1]).probability_alias)
+        @test rand(AliasTable([1e-70, 1])) == 2
+        @test rand(AliasTable([0, 1]), 3)::Vector{Int} == [2,2,2]
+        @test rand(AliasTable{UInt, Int8}([0, 1]), 3)::Vector{Int8} == [2,2,2]
+        @test rand(AliasTable([typemax(Int)-10, 5, 5, 5])) == 1
     end
 
     @testset "Invalid weight error messages" begin
-        @test_throws ArgumentError("found negative weight -1") OffsetTable([1, -1])
-        @test_throws ArgumentError("found negative weight -1") OffsetTable([1, 1, -1])
-        @test_throws ArgumentError("all weights are zero") OffsetTable([0, 0])
-        @test_throws ArgumentError("all weights are zero") OffsetTable([0])
-        @test_throws ArgumentError("all weights are zero") OffsetTable(UInt[0, 0])
-        @test_throws ArgumentError("all weights are zero") OffsetTable(UInt[0])
-        @test_throws ArgumentError("weights must be non-empty") OffsetTable(Int[])
-        @test_throws ArgumentError("weights must be non-empty") OffsetTable(UInt[])
-        @test_throws ArgumentError("sum(weights) is too low") OffsetTable(UInt[123, 456], normalize=false)
-        @test_throws ArgumentError("sum(weights) is too high") OffsetTable(UInt[unsigned(3)<<62, unsigned(2)<<62, unsigned(3)<<62], normalize=false)
-        @test_throws ArgumentError("sum(weights) overflows") OffsetTable(UInt[unsigned(3)<<62, unsigned(2)<<62, unsigned(3)<<62])
-        @test OffsetTables.probabilities(float, OffsetTable(UInt[unsigned(3)<<61, unsigned(2)<<61, unsigned(3)<<61])) == [3,2,3] ./ 8
-        @test OffsetTables.probabilities(float, OffsetTable(UInt[unsigned(3)<<61, unsigned(2)<<61, unsigned(3)<<61], normalize=false)) == [3,2,3] ./ 8
+        @test_throws ArgumentError("found negative weight -1") AliasTable([1, -1])
+        @test_throws ArgumentError("found negative weight -1") AliasTable([1, 1, -1])
+        @test_throws ArgumentError("all weights are zero") AliasTable([0, 0])
+        @test_throws ArgumentError("all weights are zero") AliasTable([0])
+        @test_throws ArgumentError("all weights are zero") AliasTable(UInt[0, 0])
+        @test_throws ArgumentError("all weights are zero") AliasTable(UInt[0])
+        @test_throws ArgumentError("weights must be non-empty") AliasTable(Int[])
+        @test_throws ArgumentError("weights must be non-empty") AliasTable(UInt[])
+        @test_throws ArgumentError("sum(weights) is too low") AliasTable(UInt[123, 456], normalize=false)
+        @test_throws ArgumentError("sum(weights) is too high") AliasTable(UInt[unsigned(3)<<62, unsigned(2)<<62, unsigned(3)<<62], normalize=false)
+        @test_throws ArgumentError("sum(weights) overflows") AliasTable(UInt[unsigned(3)<<62, unsigned(2)<<62, unsigned(3)<<62])
+        @test AliasTables.probabilities(float, AliasTable(UInt[unsigned(3)<<61, unsigned(2)<<61, unsigned(3)<<61])) == [3,2,3] ./ 8
+        @test AliasTables.probabilities(float, AliasTable(UInt[unsigned(3)<<61, unsigned(2)<<61, unsigned(3)<<61], normalize=false)) == [3,2,3] ./ 8
     end
 
     @testset "sample()" begin
-        @test Base.hasmethod(OffsetTables.sample, Tuple{UInt, OffsetTable{UInt, Int}})
-        @test Base.hasmethod(OffsetTables.sample, Tuple{Random.MersenneTwister, OffsetTable{UInt, Int}})
-        @test !Base.hasmethod(OffsetTables.sample, Tuple{UInt32, OffsetTable{UInt64, Int}})
+        @test Base.hasmethod(AliasTables.sample, Tuple{UInt, AliasTable{UInt, Int}})
+        @test Base.hasmethod(AliasTables.sample, Tuple{Random.MersenneTwister, AliasTable{UInt, Int}})
+        @test !Base.hasmethod(AliasTables.sample, Tuple{UInt32, AliasTable{UInt64, Int}})
     end
 
     @testset "Exact" begin
         for i in 1:100
             p = rand(i)
-            ot = OffsetTable(p)
-            @test maximum(abs, OffsetTables.probabilities(ot) ./ (big(typemax(UInt))+1) .- p ./ sum(big, p)) ≤ .5^64
-            @test OffsetTables.probabilities(float, ot) ≈  p ./ sum(p)
-            @test OffsetTable(OffsetTables.probabilities(ot)) == ot
-            # @test OffsetTable(OffsetTables.probabilities(float, ot)) == ot
+            ot = AliasTable(p)
+            @test maximum(abs, AliasTables.probabilities(ot) ./ (big(typemax(UInt))+1) .- p ./ sum(big, p)) ≤ .5^64
+            @test AliasTables.probabilities(float, ot) ≈  p ./ sum(p)
+            @test AliasTable(AliasTables.probabilities(ot)) == ot
+            # @test AliasTable(AliasTables.probabilities(float, ot)) == ot
 
             if i == 1
                 p2 = [typemax(UInt)]
@@ -61,12 +61,12 @@ using RegressionTests
                 p2 = floor.(UInt, (typemax(UInt)/sum(p)) .* p)
                 p2[end] = typemax(UInt) - sum(p2[1:end-1]) + 1
             end
-            ot2 = OffsetTable(p2)
-            @test maximum(abs, OffsetTables.probabilities(ot2) ./ (big(typemax(UInt))+1) .- p2 ./ sum(big, p2)) ≤ .5^64
-            @test OffsetTables.probabilities(ot2) == p2
-            @test OffsetTables.probabilities(float, ot2) ≈  p ./ sum(p)
-            # @test OffsetTable(OffsetTables.probabilities(float, ot2)) == ot2
-            @test OffsetTable(OffsetTables.probabilities(ot2)) == ot2
+            ot2 = AliasTable(p2)
+            @test maximum(abs, AliasTables.probabilities(ot2) ./ (big(typemax(UInt))+1) .- p2 ./ sum(big, p2)) ≤ .5^64
+            @test AliasTables.probabilities(ot2) == p2
+            @test AliasTables.probabilities(float, ot2) ≈  p ./ sum(p)
+            # @test AliasTable(AliasTables.probabilities(float, ot2)) == ot2
+            @test AliasTable(AliasTables.probabilities(ot2)) == ot2
         end
 
         function counts(x, levels)
@@ -76,40 +76,40 @@ using RegressionTests
             end
             c
         end
-        let ot = OffsetTable{UInt16}([10, 5, 1])
-            @test counts(Iterators.map(x -> OffsetTables.sample(x, ot), typemin(UInt16):typemax(UInt16)), 3) ==
+        let ot = AliasTable{UInt16}([10, 5, 1])
+            @test counts(Iterators.map(x -> AliasTables.sample(x, ot), typemin(UInt16):typemax(UInt16)), 3) ==
                 2^16/16 * [10, 5, 1]
         end
     end
 
     @testset "Equality and hashing" begin
-        a = OffsetTable([1, 2, 3])
-        b = OffsetTable([1, 2, 3, 0, 0])
+        a = AliasTable([1, 2, 3])
+        b = AliasTable([1, 2, 3, 0, 0])
         @test a == b
 
         data = [
             [
-                OffsetTable([1, 2, 5]),
-                OffsetTable([2, 4, 10]),
-                OffsetTable([1, 2, 5] * 1729),
-                OffsetTable([1, 2, 5, 0, 0]),
-                OffsetTable{UInt16, Int32}([1,2,5]),
-                OffsetTable{UInt16}([1,2,5]),
-                OffsetTable{UInt, Int32}([1,2,5]),
-                OffsetTable(UInt[unsigned(1)<<61, unsigned(2)<<61, unsigned(5)<<61]),
+                AliasTable([1, 2, 5]),
+                AliasTable([2, 4, 10]),
+                AliasTable([1, 2, 5] * 1729),
+                AliasTable([1, 2, 5, 0, 0]),
+                AliasTable{UInt16, Int32}([1,2,5]),
+                AliasTable{UInt16}([1,2,5]),
+                AliasTable{UInt, Int32}([1,2,5]),
+                AliasTable(UInt[unsigned(1)<<61, unsigned(2)<<61, unsigned(5)<<61]),
             ],[
-                OffsetTable([1, 2.0001, 5]),
+                AliasTable([1, 2.0001, 5]),
             ],[
-                OffsetTable([0,0,0,0,1]),
-                OffsetTable([0,0,0,0,1,0,0,0,0,0,0,0]),
-                OffsetTable([1e-70,0,0,0,1]),
-                OffsetTable([1e-70,0,0,0,1,0,0,0,1e-70]),
+                AliasTable([0,0,0,0,1]),
+                AliasTable([0,0,0,0,1,0,0,0,0,0,0,0]),
+                AliasTable([1e-70,0,0,0,1]),
+                AliasTable([1e-70,0,0,0,1,0,0,0,1e-70]),
             ],[
-                OffsetTable([1, 2, 3, 5]),
-                OffsetTable{UInt64, Int8}([1, 2, 3, 5]),
+                AliasTable([1, 2, 3, 5]),
+                AliasTable{UInt64, Int8}([1, 2, 3, 5]),
             ],[
-                OffsetTable{UInt16}([1, 2, 3, 5]),
-                OffsetTable{UInt16, Int8}([1, 2, 3, 5]),
+                AliasTable{UInt16}([1, 2, 3, 5]),
+                AliasTable{UInt16, Int8}([1, 2, 3, 5]),
             ]
         ]
 
@@ -119,16 +119,16 @@ using RegressionTests
                     @test a == b
                     hash(a) == hash(b) || @show a, b
                     @test hash(a) == hash(b)
-                    @test OffsetTables.probabilities(float, a) == OffsetTables.probabilities(float, b)
-                    if eltype(OffsetTables.probabilities(a)) == eltype(OffsetTables.probabilities(b))
-                        @test OffsetTables.probabilities(a) == OffsetTables.probabilities(b)
+                    @test AliasTables.probabilities(float, a) == AliasTables.probabilities(float, b)
+                    if eltype(AliasTables.probabilities(a)) == eltype(AliasTables.probabilities(b))
+                        @test AliasTables.probabilities(a) == AliasTables.probabilities(b)
                     end
                 end
             else
                 @test a != b
                 @test hash(a) != hash(b)
-                @test OffsetTables.probabilities(float, a) != OffsetTables.probabilities(float, b)
-                @test OffsetTables.probabilities(a) != OffsetTables.probabilities(b)
+                @test AliasTables.probabilities(float, a) != AliasTables.probabilities(float, b)
+                @test AliasTables.probabilities(a) != AliasTables.probabilities(b)
             end
         end
     end

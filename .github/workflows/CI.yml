@@ -71,6 +71,6 @@ jobs:
         shell: julia --project=docs --color=yes {0}
         run: |
           using Documenter: DocMeta, doctest
-          using OffsetTables
-          DocMeta.setdocmeta!(OffsetTables, :DocTestSetup, :(using OffsetTables); recursive=true)
-          doctest(OffsetTables)
+          using AliasTables
+          DocMeta.setdocmeta!(AliasTables, :DocTestSetup, :(using AliasTables); recursive=true)
+          doctest(AliasTables)

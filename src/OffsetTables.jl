@@ -1,12 +1,12 @@
-module OffsetTables
+module AliasTables
 
 using Random
 
-export OffsetTable
+export AliasTable
 public sample
 
 """
-    OffsetTable{T<:Unsigned=UInt, I<:Integer=Int}(weights::AbstractVector{<:Real}; normalize=true)
+    AliasTable{T<:Unsigned=UInt, I<:Integer=Int}(weights::AbstractVector{<:Real}; normalize=true)
 
 An efficient data structure for sampling from a discrete distribution.
 
@@ -15,69 +15,69 @@ that the number of values maped to a given index of `weights` is proportional to
 at that index.
 
 The mapping can be accessed directly via
-[`OffsetTables.sample(x::T, ot::OffsetTable{T, I})`](@ref OffsetTables.sample(::T, ::OffsetTable{T, I}) where {T, I})
+[`AliasTables.sample(x::T, ot::AliasTable{T, I})`](@ref AliasTables.sample(::T, ::AliasTable{T, I}) where {T, I})
 or indirectly by passing a random number generator which will be used to generate a
 random input of type `T` for you via
-[`OffsetTables.sample(rng::Random.AbstractRNG, ot::OffsetTable{T, I})`](@ref OffsetTables.sample(::Random.AbstractRNG, ::OffsetTable))
+[`AliasTables.sample(rng::Random.AbstractRNG, ot::AliasTable{T, I})`](@ref AliasTables.sample(::Random.AbstractRNG, ::AliasTable))
 or simply via the `Random` API: `rand(ot)`, `rand(rng, ot)`, `rand(ot, dims...)`, etc.
 
 Set `normalize = false` for incrased performance when the weights are already normalized to
 sum to exactly the number of values representable by `T` (i.e. `typemax(T)+1`). A different
 sum will result in an error unless exactly one weight is non-zero, in which case the sum is
-not checked and the `OffsetTable` represents a constant distribution which always produces
+not checked and the `AliasTable` represents a constant distribution which always produces
 the index of the nonzero weight.
 """
-struct OffsetTable{T <: Unsigned, I <: Integer}
-    probability_offset::Memory{Tuple{T, I}}
+struct AliasTable{T <: Unsigned, I <: Integer}
+    probability_alias::Memory{Tuple{T, I}}
     """
-        _OffsetTable(probability_offset::Memory{Tuple{T, I}})
+        _AliasTable(probability_alias::Memory{Tuple{T, I}})
 
-    Construct an `OffsetTable` from a `Memory` of `(probability, offset)` pairs.
+    Construct an `AliasTable` from a `Memory` of `(probability, alias)` pairs.
 
     Callers are responsible for ensuring that
 
-        probability_offset == OffsetTable(probabilities(_OffsetTable(probability_offset))).probability_offset
+        probability_alias == AliasTable(probabilities(_AliasTable(probability_alias))).probability_alias
 
-    i.e. that wherever they got the `probability_offset` from, it is a form that would be
+    i.e. that wherever they got the `probability_alias` from, it is a form that would be
     produced by the internal default construcors (which are subject to change).
 
     If callers fail to do this, then equality and hashing may be broken.
     """
-    _OffsetTable(probability_offset::Memory{Tuple{T, I}}) where {T, I} = new{T, I}(probability_offset)
-    global _OffsetTable
+    _AliasTable(probability_alias::Memory{Tuple{T, I}}) where {T, I} = new{T, I}(probability_alias)
+    global _AliasTable
 end
 
-OffsetTable(weights::AbstractVector{<:Real}; normalize=true) = OffsetTable{UInt, Int}(weights; normalize)
-OffsetTable{T}(weights::AbstractVector{<:Real}; normalize=true) where T <: Unsigned = OffsetTable{T, Int}(weights; normalize)
-function OffsetTable{T, I}(weights; normalize=true) where {T <: Unsigned, I <: Integer}
-    # function _OffsetTable(::Type{T}, ::Type{I}, weights; normalize=true) where {T <: Unsigned, I <: Integer}
+AliasTable(weights::AbstractVector{<:Real}; normalize=true) = AliasTable{UInt, Int}(weights; normalize)
+AliasTable{T}(weights::AbstractVector{<:Real}; normalize=true) where T <: Unsigned = AliasTable{T, Int}(weights; normalize)
+function AliasTable{T, I}(weights; normalize=true) where {T <: Unsigned, I <: Integer}
+    # function _AliasTable(::Type{T}, ::Type{I}, weights; normalize=true) where {T <: Unsigned, I <: Integer}
     Base.require_one_based_indexing(weights)
     if normalize
         (is_constant, sm) = checked_sum(weights)
         if is_constant
-            _constant_offset_table(T, I, sm)
+            _constant_alias_table(T, I, sm)
         elseif sm == 0 # pre-normalized
-            _offset_table(T, I, weights)
+            _alias_table(T, I, weights)
         else
             # norm = normalize_to_uint_lazy_frac_div(T, weights, sm)
             norm = normalize_to_uint_frac_div(T, weights, sm)
-            _offset_table(T, I, norm)
+            _alias_table(T, I, norm)
         end
     else
-        _offset_table(T, I, weights)
+        _alias_table(T, I, weights)
     end
 end
 
-function _constant_offset_table(::Type{T}, ::Type{I}, index) where {I, T}
+function _constant_alias_table(::Type{T}, ::Type{I}, index) where {I, T}
     bitshift = Base.top_set_bit(index - 1)
     len = 1 << bitshift
     points_per_cell = one(T) << (8*sizeof(T) - bitshift)#typemax(T)+1 / len
 
-    probability_offset = Memory{Tuple{T, I}}(undef, len)
+    probability_alias = Memory{Tuple{T, I}}(undef, len)
     for i in 1:len
-        probability_offset[i] = (points_per_cell, index-i)
+        probability_alias[i] = (points_per_cell, index-i)
     end
-    _OffsetTable(probability_offset)
+    _AliasTable(probability_alias)
 end
 
 function get_only_nonzero(weights)
@@ -109,9 +109,9 @@ Base.length(A::HotTake) = A.n
 hot_take(xs::Array, n) = HotTake(xs, n)
 hot_take(xs, n) = Iterators.take(xs, n)
 
-function _offset_table(::Type{T}, ::Type{I}, weights0) where {I, T}
+function _alias_table(::Type{T}, ::Type{I}, weights0) where {I, T}
     onz = get_only_nonzero(weights0)
-    onz == -2 || return _constant_offset_table(T, I, onz)
+    onz == -2 || return _constant_alias_table(T, I, onz)
 
     # weights = Iterators.take(weights0, findlast(!iszero, weights0))
     weights = hot_take(weights0, findlast(!iszero, weights0))
@@ -123,7 +123,7 @@ function _offset_table(::Type{T}, ::Type{I}, weights0) where {I, T}
     len = 1 << bitshift#next_or_eq_power_of_two(length(weights))
     points_per_cell = one(T) << (8*sizeof(T) - bitshift)#typemax(T)+1 / len
 
-    probability_offset = Memory{Tuple{T, I}}(undef, len)
+    probability_alias = Memory{Tuple{T, I}}(undef, len)
 
     # @show sum(weights)
     # @show weights
@@ -143,7 +143,7 @@ function _offset_table(::Type{T}, ::Type{I}, weights0) where {I, T}
                 thirsty_desired >= points_per_cell && break
             end
             excess = points_per_cell - current_desired                             # Assign this many extra points
-            probability_offset[current_i] = (excess, thirsty_i-current_i)          # To the targeted cell
+            probability_alias[current_i] = (excess, thirsty_i-current_i)          # To the targeted cell
             current_i = thirsty_i                                                  # Now we have to make sure that thristy cell gets exactly what it wants and no more
             current_desired = thirsty_desired - excess                             # It wants what it wants and hasn't already been transferred
         else                                 # Thirsty (loose)
@@ -154,7 +154,7 @@ function _offset_table(::Type{T}, ::Type{I}, weights0) where {I, T}
                 surplus_desired < points_per_cell && break
             end
             excess = points_per_cell - surplus_desired                             # Assign this many extra points
-            probability_offset[surplus_i] = (excess, current_i-surplus_i)          # From the cell with surplus to this cell
+            probability_alias[surplus_i] = (excess, current_i-surplus_i)          # From the cell with surplus to this cell
             current_desired -= excess                                              # We now don't want as many points (and may even no longer be thristy)
         end
     end
@@ -179,7 +179,7 @@ function _offset_table(::Type{T}, ::Type{I}, weights0) where {I, T}
                 thirsty_desired >= points_per_cell && break
             end
             excess = points_per_cell - current_desired                             # Assign this many extra points
-            probability_offset[current_i] = (excess, thirsty_i-current_i)          # To the targeted cell
+            probability_alias[current_i] = (excess, thirsty_i-current_i)          # To the targeted cell
             current_i = thirsty_i                                                  # Now we have to make sure that thristy cell gets exactly what it wants and no more
             current_desired = thirsty_desired - excess                             # It wants what it wants and hasn't already been transferred
         else                                 # Thirsty (loose)
@@ -187,17 +187,17 @@ function _offset_table(::Type{T}, ::Type{I}, weights0) where {I, T}
             surplus_state_2 > len && break # If there is no surplus cell, handle below
             surplus_i = surplus_state_2
             excess = points_per_cell                                               # Assign all the points
-            probability_offset[surplus_i] = (points_per_cell, current_i-surplus_i) # From the synthetic cell with surplus to this cell
+            probability_alias[surplus_i] = (points_per_cell, current_i-surplus_i) # From the synthetic cell with surplus to this cell
             current_desired -= excess                                              # We now don't want as many points (and may even no longer be thristy)
         end
     end
 
-    # @show probability_offset, points_per_cell, current_desired
+    # @show probability_alias, points_per_cell, current_desired
 
     if points_per_cell < current_desired  # Strictly thirsty, and no surplus cells, so exceed the desired weight.
         throw(ArgumentError("sum(weights) is too high"))
     end
-    probability_offset[current_i] = (0, 0)
+    probability_alias[current_i] = (0, 0)
     # Just right. There are no surplus cells left and no current surplus or thirst. All
     # that's left are future loosely thirsty cells, all of which should be a thirst of
     # exactly 0.
@@ -206,14 +206,14 @@ function _offset_table(::Type{T}, ::Type{I}, weights0) where {I, T}
         ix === nothing && break # Out of thirsty cells, yay!
         (thirsty_i, thirsty_desired), thirsty_state = ix
         points_per_cell < thirsty_desired && throw(ArgumentError("sum(weights) is too high")) # Strictly thirsty, with no surplus to draw from.
-        points_per_cell == thirsty_desired && (probability_offset[thirsty_i] = (0, 0)) # loosely thirsty, but satisfied. Zero out the undef.
+        points_per_cell == thirsty_desired && (probability_alias[thirsty_i] = (0, 0)) # loosely thirsty, but satisfied. Zero out the undef.
     end
 
-    _OffsetTable(probability_offset)
+    _AliasTable(probability_alias)
 end
 
 """
-    sample(x::T, ot::OffsetTable{T, I}) -> I
+    sample(x::T, ot::AliasTable{T, I}) -> I
 
 Sample from `ot` using the seed `x`.
 
@@ -222,43 +222,43 @@ the output will be a random sample from the distribution represented by `ot`. Th
 deterministic and not pseudo-random so for patterned input `x` the output will be patterned
 as well.
 
-See also [`OffsetTable`](@ref)
+See also [`AliasTable`](@ref)
 """
-function sample(x::T, ot::OffsetTable{T, I}) where {T, I}
-    count_ones(length(ot.probability_offset)) == 1 || return zero(I) # This should never happen, but it makes the @inbounds safe
-    shift = 8sizeof(T) - Base.top_set_bit(length(ot.probability_offset)) + 1
+function sample(x::T, ot::AliasTable{T, I}) where {T, I}
+    count_ones(length(ot.probability_alias)) == 1 || return zero(I) # This should never happen, but it makes the @inbounds safe
+    shift = 8sizeof(T) - Base.top_set_bit(length(ot.probability_alias)) + 1
     cell = (x >> shift) + 1
     val = x & ((one(T) << shift) - one(T))
-    @inbounds prob, offset = ot.probability_offset[cell%Int]
-    # (val < prob ? (offset+cell) : I(cell))::I
-    # I((val < prob) * offset + cell)::I
-    (((val < prob) * offset + cell)%I)::I
+    @inbounds prob, alias = ot.probability_alias[cell%Int]
+    # (val < prob ? (alias+cell) : I(cell))::I
+    # I((val < prob) * alias + cell)::I
+    (((val < prob) * alias + cell)%I)::I
 end
 
 """
-    sample(rng::Random.AbstractRNG, ot::OffsetTable{T, I}) -> I
+    sample(rng::Random.AbstractRNG, ot::AliasTable{T, I}) -> I
 
 Sample from `ot` using randomness drawn from `rng`.
 
 Produces a random sample from the distribution represented by `ot`.
 
-See also [`OffsetTable`](@ref), `Random.rand`
+See also [`AliasTable`](@ref), `Random.rand`
 """
-function sample(rng::Random.AbstractRNG, ot::OffsetTable{T, I}) where {T, I}
+function sample(rng::Random.AbstractRNG, ot::AliasTable{T, I}) where {T, I}
     sample(rand(rng, T), ot)
 end
 
 ### Random API
-Random.rand(rng::Random.AbstractRNG, ot::Random.SamplerTrivial{<:OffsetTable}) = sample(rng, ot.self)
-Random.gentype(::Type{OffsetTable{T, I}}) where {T, I} = I
+Random.rand(rng::Random.AbstractRNG, ot::Random.SamplerTrivial{<:AliasTable}) = sample(rng, ot.self)
+Random.gentype(::Type{AliasTable{T, I}}) where {T, I} = I
 
 ### Reconstruct probabilities
-function probabilities(ot::OffsetTable{T}) where T
-    bitshift = Base.top_set_bit(length(ot.probability_offset) - 1)
+function probabilities(ot::AliasTable{T}) where T
+    bitshift = Base.top_set_bit(length(ot.probability_alias) - 1)
     points_per_cell = one(T) << (8*sizeof(T) - bitshift)#typemax(T)+1 / len
-    probs = zeros(T, length(ot.probability_offset))
-    for (i, (prob, offset)) in enumerate(ot.probability_offset)
-        probs[i + offset] += prob
+    probs = zeros(T, length(ot.probability_alias))
+    for (i, (prob, alias)) in enumerate(ot.probability_alias)
+        probs[i + alias] += prob
         probs[i] += points_per_cell - prob
     end
     li = findlast(!iszero, probs)
@@ -271,14 +271,14 @@ function probabilities(ot::OffsetTable{T}) where T
     probs
 end
 
-probabilities(::typeof(float), ot::OffsetTable{T}) where T =
+probabilities(::typeof(float), ot::AliasTable{T}) where T =
     probabilities(ot) ./ (float(typemax(T))+1)
 
 
 ### Show
-function Base.show(io::IO, ot::OffsetTable{T, I}) where {T, I}
-    print(io, OffsetTable)
-    if get(io, :typeinfo, nothing) != OffsetTable{T, I} && (T != UInt || I != Int)
+function Base.show(io::IO, ot::AliasTable{T, I}) where {T, I}
+    print(io, AliasTable)
+    if get(io, :typeinfo, nothing) != AliasTable{T, I} && (T != UInt || I != Int)
         if I == Int
             print(io, "{", T, "}")
         else
@@ -287,7 +287,7 @@ function Base.show(io::IO, ot::OffsetTable{T, I}) where {T, I}
     end
     print(io, "(")
     # print(IOContext(io, :typeinfo=>Vector{T}), probabilities(ot))
-    print(IOContext(io, :typeinfo=>Memory{Tuple{T, I}}), ot.probability_offset)
+    print(IOContext(io, :typeinfo=>Memory{Tuple{T, I}}), ot.probability_alias)
     print(io, ")")
 end
 
@@ -296,11 +296,11 @@ end
 # These naive implementations are equivalent to computing equality based on
 # `WithZeros(probabilities, Inf)` because the constrors are deterministic w.r.t
 # the input weights exclusind trailing zeros.
-Base.:(==)(ot1::OffsetTable{T}, ot2::OffsetTable{T}) where T = ot1.probability_offset == ot2.probability_offset
-function Base.:(==)(ot1::OffsetTable{T1}, ot2::OffsetTable{T2}) where {T1, T2}
+Base.:(==)(ot1::AliasTable{T}, ot2::AliasTable{T}) where T = ot1.probability_alias == ot2.probability_alias
+function Base.:(==)(ot1::AliasTable{T1}, ot2::AliasTable{T2}) where {T1, T2}
     bitshift = 8(sizeof(T1) - sizeof(T2))
-    length(ot1.probability_offset) == length(ot2.probability_offset) || return false
-    for (po1, po2) in zip(ot1.probability_offset, ot2.probability_offset)
+    length(ot1.probability_alias) == length(ot2.probability_alias) || return false
+    for (po1, po2) in zip(ot1.probability_alias, ot2.probability_alias)
         po1[2] == po2[2] &&
         if bitshift > 0
             po1[1] == T1(po2[1]) << bitshift
@@ -316,12 +316,12 @@ struct MapVector{T, F, P} <: AbstractVector{T}
 end
 Base.size(mv::MapVector) = size(mv.parent)
 Base.getindex(mv::MapVector{T, F, P}, i) where {T, F, P} = mv.f(mv.parent[i])
-function Base.hash(ot::OffsetTable, h::UInt)
+function Base.hash(ot::AliasTable, h::UInt)
     h ⊻= Sys.WORD_SIZE == 32 ? 0x7719cd5e : 0x0a0c5cfeeb10f090
-    # isempty(ot.probability_offset) && return hash(0, h) # This should never happen, but it makes first not throw.
-    po1 = first(ot.probability_offset)
+    # isempty(ot.probability_alias) && return hash(0, h) # This should never happen, but it makes first not throw.
+    po1 = first(ot.probability_alias)
     norm(x) = (ldexp(float(x[1]), -8sizeof(x[1])), x[2])
-    hash(MapVector{typeof(norm(po1)), typeof(norm), typeof(ot.probability_offset)}(ot.probability_offset, norm), h)
+    hash(MapVector{typeof(norm(po1)), typeof(norm), typeof(ot.probability_alias)}(ot.probability_alias, norm), h)
 end
 
 ## Normalization

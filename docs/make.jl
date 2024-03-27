@@ -1,15 +1,15 @@
-using OffsetTables
+using AliasTables
 using Documenter
 using DocumenterVitepress
 
-DocMeta.setdocmeta!(OffsetTables, :DocTestSetup, :(using OffsetTables); recursive=true)
+DocMeta.setdocmeta!(AliasTables, :DocTestSetup, :(using AliasTables); recursive=true)
 
 makedocs(;
     authors="Lilith Orion Hafner <lilithhafner@gmail.com> and contributors",
-    repo=Remotes.GitHub("LilithHafner", "OffsetTables.jl"),
-    sitename="OffsetTables.jl",
+    repo=Remotes.GitHub("LilithHafner", "AliasTables.jl"),
+    sitename="AliasTables.jl",
     format=DocumenterVitepress.MarkdownVitepress(
-        repo = "https://github.com/LilithHafner/OffsetTables.jl",
+        repo = "https://github.com/LilithHafner/AliasTables.jl",
         devbranch = "main",
         devurl = "dev",
         deploy_url = "chairmarks.lilithhafner.com"),
@@ -19,7 +19,7 @@ makedocs(;
 )
 
 deploydocs(;
-    repo="github.com/LilithHafner/OffsetTables.jl",
+    repo="github.com/LilithHafner/AliasTables.jl",
     push_preview=true,
     devbranch="main",
 )

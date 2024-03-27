@@ -107,9 +107,9 @@ version = "2023.12.12"
 uuid = "ca575930-c2e3-43a9-ace4-1e988b2c1908"
 version = "1.2.0"
 
-[[deps.OffsetTables]]
+[[deps.AliasTables]]
 deps = ["Random"]
-path = "/home/x/.julia/dev/OffsetTables"
+path = "/home/x/.julia/dev/AliasTables"
 uuid = "66dad0bd-aa9a-41b7-9441-69ab47430ed8"
 version = "0.0.0"
 
