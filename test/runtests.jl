@@ -6,8 +6,8 @@ using RegressionTests
 
 @testset "OffsetTables.jl" begin
     @testset "Code quality (Aqua.jl)" begin
-        # Aqua.test_all(OffsetTables, deps_compat=false)
-        # Aqua.test_deps_compat(OffsetTables, check_extras=false)
+        Aqua.test_all(OffsetTables, deps_compat=false)
+        Aqua.test_deps_compat(OffsetTables, check_extras=false)
     end
 
     @testset "Basic" begin
@@ -134,6 +134,6 @@ using RegressionTests
     end
 
     @testset "RegressionTests" begin
-        # RegressionTests.test(skip_unsupported_platforms=true)
+        RegressionTests.test(skip_unsupported_platforms=true)
     end
 end
