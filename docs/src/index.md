@@ -4,8 +4,6 @@ CurrentModule = AliasTables
 
 # AliasTables
 
-Requires Julia 1.11+
-
 [AliasTables](https://github.com/LilithHafner/AliasTables.jl) provides the
 [`AliasTable`](@ref) type, which is an object that defines a probability distribution over
 `1:n` for some `n`. They are efficient to construct and very efficient to sample from.
