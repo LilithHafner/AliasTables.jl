@@ -134,6 +134,6 @@ using RegressionTests
     end
 
     @testset "RegressionTests" begin
-        RegressionTests.test(skip_unsupported_platforms=true)
+        v"1.11.0-alpha2" <= VERSION && RegressionTests.test(skip_unsupported_platforms=true)
     end
 end
