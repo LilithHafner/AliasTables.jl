@@ -3,7 +3,21 @@ module AliasTables
 using Random
 
 export AliasTable
-public sample
+VERSION >= v"1.11.0-DEV.469" && eval(Meta.parse("public sample"))
+
+const Memory = isdefined(Base, :Memory) ? Base.Memory : Vector # VERSION <= 1.10
+
+if isdefined(Base, :top_set_bit)
+    const top_set_bit = Base.top_set_bit
+else
+    top_set_bit(x::Integer) = 64 - leading_zeros(UInt64(x)) # VERSION <= 1.9
+end
+
+if isdefined(Base, :require_one_based_indexing) # VERSION == 1.0
+    const require_one_based_indexing = Base.require_one_based_indexing
+else
+    require_one_based_indexing(A...) = !Base.has_offset_axes(A...) || throw(ArgumentError("offset arrays are not supported but got an array with index other than 1"))
+end
 
 """
     AliasTable{T<:Unsigned=UInt, I<:Integer=Int}(weights::AbstractVector{<:Real}; normalize=true)
@@ -47,11 +61,11 @@ struct AliasTable{T <: Unsigned, I <: Integer}
     global _AliasTable
 end
 
-AliasTable(weights::AbstractVector{<:Real}; normalize=true) = AliasTable{UInt, Int}(weights; normalize)
-AliasTable{T}(weights::AbstractVector{<:Real}; normalize=true) where T <: Unsigned = AliasTable{T, Int}(weights; normalize)
+AliasTable(weights::AbstractVector{<:Real}; normalize=true) = AliasTable{UInt, Int}(weights; normalize=normalize)
+AliasTable{T}(weights::AbstractVector{<:Real}; normalize=true) where T <: Unsigned = AliasTable{T, Int}(weights; normalize=normalize)
 function AliasTable{T, I}(weights; normalize=true) where {T <: Unsigned, I <: Integer}
     # function _AliasTable(::Type{T}, ::Type{I}, weights; normalize=true) where {T <: Unsigned, I <: Integer}
-    Base.require_one_based_indexing(weights)
+    require_one_based_indexing(weights)
     if normalize
         (is_constant, sm) = checked_sum(weights)
         if is_constant
@@ -69,7 +83,7 @@ function AliasTable{T, I}(weights; normalize=true) where {T <: Unsigned, I <: In
 end
 
 function _constant_alias_table(::Type{T}, ::Type{I}, index) where {I, T}
-    bitshift = Base.top_set_bit(index - 1)
+    bitshift = top_set_bit(index - 1)
     len = 1 << bitshift
     points_per_cell = one(T) << (8*sizeof(T) - bitshift)#typemax(T)+1 / len
 
@@ -104,7 +118,7 @@ struct HotTake{T<:Array}
     n::Int
     HotTake(xs::Array, n::Int) = new{typeof(xs)}(xs, min(n, length(xs)))
 end
-Base.iterate(A::HotTake, i=1) = (@inline; (i - 1)%UInt < A.n%UInt ? (@inbounds A.xs[i], i + 1) : nothing)
+Base.iterate(A::HotTake, i=1) = ((i - 1)%UInt < A.n%UInt ? (@inbounds A.xs[i], i + 1) : nothing)
 Base.length(A::HotTake) = A.n
 hot_take(xs::Array, n) = HotTake(xs, n)
 hot_take(xs, n) = Iterators.take(xs, n)
@@ -119,7 +133,7 @@ function _alias_table(::Type{T}, ::Type{I}, weights0) where {I, T}
     # while iszero(last(weights))
         # pop!(weights)
     # end
-    bitshift = Base.top_set_bit(length(weights) - 1)
+    bitshift = top_set_bit(length(weights) - 1)
     len = 1 << bitshift#next_or_eq_power_of_two(length(weights))
     points_per_cell = one(T) << (8*sizeof(T) - bitshift)#typemax(T)+1 / len
 
@@ -226,7 +240,7 @@ See also [`AliasTable`](@ref)
 """
 function sample(x::T, ot::AliasTable{T, I}) where {T, I}
     count_ones(length(ot.probability_alias)) == 1 || return zero(I) # This should never happen, but it makes the @inbounds safe
-    shift = 8sizeof(T) - Base.top_set_bit(length(ot.probability_alias)) + 1
+    shift = 8sizeof(T) - top_set_bit(length(ot.probability_alias)) + 1
     cell = (x >> shift) + 1
     val = x & ((one(T) << shift) - one(T))
     @inbounds prob, alias = ot.probability_alias[cell%Int]
@@ -254,7 +268,7 @@ Random.gentype(::Type{AliasTable{T, I}}) where {T, I} = I
 
 ### Reconstruct probabilities
 function probabilities(ot::AliasTable{T}) where T
-    bitshift = Base.top_set_bit(length(ot.probability_alias) - 1)
+    bitshift = top_set_bit(length(ot.probability_alias) - 1)
     points_per_cell = one(T) << (8*sizeof(T) - bitshift)#typemax(T)+1 / len
     probs = zeros(T, length(ot.probability_alias))
     for (i, (prob, alias)) in enumerate(ot.probability_alias)
