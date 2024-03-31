@@ -76,7 +76,7 @@ function AliasTable{T, I}(weights; normalize=true) where {T <: Unsigned, I <: In
         (is_constant, sm) = checked_sum(weights)
         if is_constant
             _constant_alias_table(T, I, sm, length(weights))
-        elseif sm == 0 # pre-normalized
+        elseif sm-true == typemax(T) # pre-normalized
             _alias_table(T, I, weights)
         else
             # norm = normalize_to_uint_lazy_frac_div(T, weights, sm)
@@ -347,6 +347,7 @@ end
 
 maybe_unsigned(x) = x # this is necessary to avoid calling unsigned on BigInt, Flaot64, etc.
 maybe_unsigned(x::Base.BitSigned) = unsigned(x)
+maybe_unsigned(x::Type{T}) where T <: Base.BitInteger = isconcretetype(x) ? unsigned(x) : x
 
 maybe_add_with_overflow(x::Base.BitInteger, y::Base.BitInteger) = Base.Checked.add_with_overflow(x, convert(typeof(x), y))
 maybe_add_with_overflow(x, y) = x+y, false
@@ -398,12 +399,6 @@ function normalize_to_uint(::Type{T}, v::AbstractVector{<:Real}) where {T <: Uns
         throw(ArgumnetError("normalization failed")) # TODO: eliminate this
     end
     res
-end
-
-function frac_div(x::T, y::T) where T <: Unsigned
-    # @assert x < y
-    # @assert y != 0
-    div(widen(x) << 8sizeof(T), y) % T
 end
 
 ####
@@ -469,7 +464,7 @@ end
 #     (frac_div(T(x), sm) + (i <= bonus) for (i,x) in enumerate(weights))
 # end
 
-function normalize_to_uint_frac_div(::Type{T}, v, sm=sum(T,v)) where {T <: Unsigned}
+function normalize_to_uint_frac_div(::Type{T}, v, sm) where {T <: Unsigned}
     if sm isa AbstractFloat
         shift = 8sizeof(T)-exponent(sm + sqrt(eps(sm)))-1
         v2 = res = [floor(T, ldexp(x, shift)) for x in v]
@@ -485,7 +480,9 @@ function normalize_to_uint_frac_div(::Type{T}, v, sm=sum(T,v)) where {T <: Unsig
     sm3 = zero(T)
 
     for (i,x) in enumerate(v2)
-        val = frac_div(T(x), T(sm2))
+        # @assert x < sm2
+        # @assert sm2 != 0
+        val = div(widen(T)(maybe_unsigned(x)) << 8sizeof(T), sm2) % T
         sm3 += val
         res[i] = val
     end
