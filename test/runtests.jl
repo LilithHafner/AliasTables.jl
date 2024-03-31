@@ -41,8 +41,9 @@ using RegressionTests
     end
 
     @testset "probabilities()" begin
-        @test AliasTables.probabilities(float AliasTable([1, 2, 3])) == [1, 2, 3]/6
-        @test AliasTables.probabilities(float AliasTable([1, 2, 3, 0, 0])) == [1, 2, 3, 0, 0]/6
+        @test AliasTables.probabilities(float, AliasTable([1, 2, 3])) == [1, 2, 3]/6
+        @test AliasTables.probabilities(float, AliasTable([1, 2, 3, 0, 0])) == [1, 2, 3, 0, 0]/6
+        @test AliasTables.probabilities(AliasTable([1, 2, 3, 0, 2])) == [1, 2, 3, 0, 2] .<< 61
     end
 
     @testset "sample()" begin
