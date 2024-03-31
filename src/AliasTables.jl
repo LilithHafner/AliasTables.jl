@@ -487,7 +487,7 @@ function normalize_to_uint_frac_div(::Type{T}, v, sm) where {T <: Unsigned}
         res[i] = val
     end
 
-    sm3 == 0 && return res
+    sm3 == 0 && any(!iszero(res)) && return res
 
     for i in sm3:typemax(sm3)
         res[typemax(sm3)-i+1] += true

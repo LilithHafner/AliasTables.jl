@@ -27,6 +27,7 @@ using RegressionTests
               AliasTable([1,1]) ==
               AliasTable{UInt8}(UInt128[typemax(UInt64), typemax(UInt64)] .<< 5) ==
               AliasTable{UInt8}([typemax(UInt32), typemax(UInt32)])
+        @test rand(AliasTable{UInt8}(fill(0x80, 2^18))) in 1:2^18
     end
 
     @testset "Invalid weight error messages" begin
