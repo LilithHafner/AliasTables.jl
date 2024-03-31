@@ -152,6 +152,26 @@ using RegressionTests
         end
     end
 
+    @testset "Display" begin
+        function repr_test(x, str)
+            @test repr(x) == str
+            @test eval(Meta.parse(str)) == x
+        end
+
+        repr_test(AliasTable([1, 2, 3]), "AliasTable([0x2aaaaaaaaaaaaaab, 0x5555555555555555, 0x8000000000000000])")
+        repr_test(AliasTable([1, 2, 5]), "AliasTable([0x2000000000000000, 0x4000000000000000, 0xa000000000000000])")
+        repr_test(AliasTable{UInt8}([1, 2, 5, 0, 0]), "AliasTable{UInt8}([0x20, 0x40, 0xa0, 0x00, 0x00])")
+        repr_test(AliasTable{UInt16, Int}([1, 2, 3]), "AliasTable{UInt16}([0x2aab, 0x5555, 0x8000])")
+        repr_test(AliasTable{UInt64, Int16}([1, 2, 3]), "AliasTable{UInt64, Int16}([0x2aaaaaaaaaaaaaab, 0x5555555555555555, 0x8000000000000000])")
+        repr_test(AliasTable{UInt16, Int16}([1, 2, 3]), "AliasTable{UInt16, Int16}([0x2aab, 0x5555, 0x8000])")
+
+        if VERSION >= v"1.6" # Below this version, Base.typeinfo_implicit is not defined, so we display with redundant type info.
+            repr_test([AliasTable([1, 2, 5]), AliasTable([0.0,1.0])], "[AliasTable([0x2000000000000000, 0x4000000000000000, 0xa000000000000000]), AliasTable([0x0000000000000000, 0xffffffffffffffff])]")
+            repr_test([AliasTable{UInt16}([1, 2, 5]), AliasTable{UInt16}([0.0,1.0])]::Vector{AliasTable{UInt16, Int}}, "[AliasTable{UInt16}([0x2000, 0x4000, 0xa000]), AliasTable{UInt16}([0x0000, 0xffff])]")
+            repr_test([AliasTable{UInt16}([1, 2, 5]), AliasTable([0.0,1.0])]::Vector{<:AliasTable}, "[AliasTable{UInt16}([0x2000, 0x4000, 0xa000]), AliasTable([0x0000000000000000, 0xffffffffffffffff])]")
+        end
+    end
+
     @testset "RegressionTests" begin
         "CI" ∈ keys(ENV) && RegressionTests.test(skip_unsupported_platforms=true)
     end

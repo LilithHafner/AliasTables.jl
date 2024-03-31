@@ -295,18 +295,17 @@ probabilities(::typeof(float), at::AliasTable{T}) where T =
 ### Show
 function Base.show(io::IO, at::AliasTable{T, I}) where {T, I}
     print(io, AliasTable)
-    if get(io, :typeinfo, nothing) != AliasTable{T, I} && (T != UInt64 || I != Int)
-        if I == Int
-            print(io, "{", T, "}")
-        else
-            print(io, "{", T, ", ", I, "}")
-        end
+    if I != Int
+        print(io, "{", T, ", ", I, "}")
+    elseif T != UInt64
+        print(io, "{", T, "}")
     end
     print(io, "(")
-    # print(IOContext(io, :typeinfo=>Vector{T}), probabilities(at))
-    print(IOContext(io, :typeinfo=>Memory{Tuple{T, I}}), at.probability_alias)
+    print(IOContext(io, :typeinfo=>Vector{T}), probabilities(at))
+    # print(IOContext(io, :typeinfo=>Memory{Tuple{T, I}}), at.probability_alias)
     print(io, ")")
 end
+isdefined(Base, :typeinfo_implicit) && (Base.typeinfo_implicit(::Type{<:AliasTable}) = true)
 
 ### Equality and hashing
 
