@@ -29,11 +29,11 @@ that the number of values maped to a given index of `weights` is proportional to
 at that index.
 
 The mapping can be accessed directly via
-[`AliasTables.sample(x::T, ot::AliasTable{T, I})`](@ref AliasTables.sample(::T, ::AliasTable{T, I}) where {T, I})
+[`AliasTables.sample(x::T, at::AliasTable{T, I})`](@ref AliasTables.sample(::T, ::AliasTable{T, I}) where {T, I})
 or indirectly by passing a random number generator which will be used to generate a
 random input of type `T` for you via
-[`AliasTables.sample(rng::Random.AbstractRNG, ot::AliasTable{T, I})`](@ref AliasTables.sample(::Random.AbstractRNG, ::AliasTable))
-or simply via the `Random` API: `rand(ot)`, `rand(rng, ot)`, `rand(ot, dims...)`, etc.
+[`AliasTables.sample(rng::Random.AbstractRNG, at::AliasTable{T, I})`](@ref AliasTables.sample(::Random.AbstractRNG, ::AliasTable))
+or simply via the `Random` API: `rand(at)`, `rand(rng, at)`, `rand(at, dims...)`, etc.
 
 Set `normalize = false` for incrased performance when the weights are already normalized to
 sum to exactly the number of values representable by `T` (i.e. `typemax(T)+1`). A different
@@ -232,51 +232,51 @@ function _alias_table(::Type{T}, ::Type{I}, weights0) where {I, T}
 end
 
 """
-    sample(x::T, ot::AliasTable{T, I}) -> I
+    sample(x::T, at::AliasTable{T, I}) -> I
 
-Sample from `ot` using the seed `x`.
+Sample from `at` using the seed `x`.
 
 If `x` is chosen uniformly at random from the set of all values representable by `T` then
-the output will be a random sample from the distribution represented by `ot`. The mapping is
+the output will be a random sample from the distribution represented by `at`. The mapping is
 deterministic and not pseudo-random so for patterned input `x` the output will be patterned
 as well.
 
 See also [`AliasTable`](@ref)
 """
-function sample(x::T, ot::AliasTable{T, I}) where {T, I}
-    shift = 8sizeof(T) - top_set_bit(length(ot.probability_alias)) + 1
+function sample(x::T, at::AliasTable{T, I}) where {T, I}
+    shift = 8sizeof(T) - top_set_bit(length(at.probability_alias)) + 1
     cell = (x >> shift) + 1
-    # @assert (one(T) << shift) - one(T) == ot.mask
-    val = x & ot.mask
-    @inbounds prob, alias = ot.probability_alias[cell%Int]
+    # @assert (one(T) << shift) - one(T) == at.mask
+    val = x & at.mask
+    @inbounds prob, alias = at.probability_alias[cell%Int]
     # (val < prob ? (alias+cell) : I(cell))::I
     # I((val < prob) * alias + cell)::I
     (((val < prob) * alias + cell)%I)::I
 end
 
 """
-    sample(rng::Random.AbstractRNG, ot::AliasTable{T, I}) -> I
+    sample(rng::Random.AbstractRNG, at::AliasTable{T, I}) -> I
 
-Sample from `ot` using randomness drawn from `rng`.
+Sample from `at` using randomness drawn from `rng`.
 
-Produces a random sample from the distribution represented by `ot`.
+Produces a random sample from the distribution represented by `at`.
 
 See also [`AliasTable`](@ref), `Random.rand`
 """
-function sample(rng::Random.AbstractRNG, ot::AliasTable{T, I}) where {T, I}
-    sample(rand(rng, T), ot)
+function sample(rng::Random.AbstractRNG, at::AliasTable{T, I}) where {T, I}
+    sample(rand(rng, T), at)
 end
 
 ### Random API
-Random.rand(rng::Random.AbstractRNG, ot::Random.SamplerTrivial{<:AliasTable}) = sample(rng, ot.self)
+Random.rand(rng::Random.AbstractRNG, at::Random.SamplerTrivial{<:AliasTable}) = sample(rng, at.self)
 Random.gentype(::Type{AliasTable{T, I}}) where {T, I} = I
 
 ### Reconstruct probabilities
-function probabilities(ot::AliasTable{T}) where T
-    bitshift = top_set_bit(length(ot.probability_alias) - 1)
+function probabilities(at::AliasTable{T}) where T
+    bitshift = top_set_bit(length(at.probability_alias) - 1)
     points_per_cell = one(T) << (8*sizeof(T) - bitshift)#typemax(T)+1 / len
-    probs = zeros(T, length(ot.probability_alias))
-    for (i, (prob, alias)) in enumerate(ot.probability_alias)
+    probs = zeros(T, length(at.probability_alias))
+    for (i, (prob, alias)) in enumerate(at.probability_alias)
         probs[i + alias] += prob
         probs[i] += points_per_cell - prob
     end
@@ -284,18 +284,18 @@ function probabilities(ot::AliasTable{T}) where T
     if li != nothing
         resize!(probs, li)
     else # overflow
-        resize!(probs, sample(zero(T), ot))
+        resize!(probs, sample(zero(T), at))
         probs[end] = typemax(T)
     end
     probs
 end
 
-probabilities(::typeof(float), ot::AliasTable{T}) where T =
-    probabilities(ot) ./ (float(typemax(T))+1)
+probabilities(::typeof(float), at::AliasTable{T}) where T =
+    probabilities(at) ./ (float(typemax(T))+1)
 
 
 ### Show
-function Base.show(io::IO, ot::AliasTable{T, I}) where {T, I}
+function Base.show(io::IO, at::AliasTable{T, I}) where {T, I}
     print(io, AliasTable)
     if get(io, :typeinfo, nothing) != AliasTable{T, I} && (T != UInt || I != Int)
         if I == Int
@@ -305,8 +305,8 @@ function Base.show(io::IO, ot::AliasTable{T, I}) where {T, I}
         end
     end
     print(io, "(")
-    # print(IOContext(io, :typeinfo=>Vector{T}), probabilities(ot))
-    print(IOContext(io, :typeinfo=>Memory{Tuple{T, I}}), ot.probability_alias)
+    # print(IOContext(io, :typeinfo=>Vector{T}), probabilities(at))
+    print(IOContext(io, :typeinfo=>Memory{Tuple{T, I}}), at.probability_alias)
     print(io, ")")
 end
 
@@ -315,11 +315,11 @@ end
 # These naive implementations are equivalent to computing equality based on
 # `WithZeros(probabilities, Inf)` because the constrors are deterministic w.r.t
 # the input weights exclusind trailing zeros.
-Base.:(==)(ot1::AliasTable{T}, ot2::AliasTable{T}) where T = ot1.probability_alias == ot2.probability_alias
-function Base.:(==)(ot1::AliasTable{T1}, ot2::AliasTable{T2}) where {T1, T2}
+Base.:(==)(at1::AliasTable{T}, at2::AliasTable{T}) where T = at1.probability_alias == at2.probability_alias
+function Base.:(==)(at1::AliasTable{T1}, at2::AliasTable{T2}) where {T1, T2}
     bitshift = 8(sizeof(T1) - sizeof(T2))
-    length(ot1.probability_alias) == length(ot2.probability_alias) || return false
-    for (po1, po2) in zip(ot1.probability_alias, ot2.probability_alias)
+    length(at1.probability_alias) == length(at2.probability_alias) || return false
+    for (po1, po2) in zip(at1.probability_alias, at2.probability_alias)
         po1[2] == po2[2] &&
         if bitshift > 0
             po1[1] == T1(po2[1]) << bitshift
@@ -335,12 +335,12 @@ struct MapVector{T, F, P} <: AbstractVector{T}
 end
 Base.size(mv::MapVector) = size(mv.parent)
 Base.getindex(mv::MapVector{T, F, P}, i) where {T, F, P} = mv.f(mv.parent[i])
-function Base.hash(ot::AliasTable, h::UInt)
+function Base.hash(at::AliasTable, h::UInt)
     h ⊻= Sys.WORD_SIZE == 32 ? 0x7719cd5e : 0x0a0c5cfeeb10f090
-    # isempty(ot.probability_alias) && return hash(0, h) # This should never happen, but it makes first not throw.
-    po1 = first(ot.probability_alias)
+    # isempty(at.probability_alias) && return hash(0, h) # This should never happen, but it makes first not throw.
+    po1 = first(at.probability_alias)
     norm(x) = (ldexp(float(x[1]), -8sizeof(x[1])), x[2])
-    hash(MapVector{typeof(norm(po1)), typeof(norm), typeof(ot.probability_alias)}(ot.probability_alias, norm), h)
+    hash(MapVector{typeof(norm(po1)), typeof(norm), typeof(at.probability_alias)}(at.probability_alias, norm), h)
 end
 
 ## Normalization
