@@ -85,25 +85,28 @@ using RegressionTests
     @testset "Equality and hashing" begin
         a = AliasTable([1, 2, 3])
         b = AliasTable([1, 2, 3, 0, 0])
-        @test a == b
+        @test a != b
+        @test a.probability_alias == b.probability_alias
 
         data = [
             [
                 AliasTable([1, 2, 5]),
                 AliasTable([2, 4, 10]),
                 AliasTable([1, 2, 5] * 1729),
-                AliasTable([1, 2, 5, 0, 0]),
                 AliasTable{UInt16, Int32}([1,2,5]),
                 AliasTable{UInt16}([1,2,5]),
                 AliasTable{UInt, Int32}([1,2,5]),
                 AliasTable(UInt[unsigned(1)<<61, unsigned(2)<<61, unsigned(5)<<61]),
             ],[
+                AliasTable([1, 2, 5, 0, 0]),
+            ],[
                 AliasTable([1, 2.0001, 5]),
             ],[
                 AliasTable([0,0,0,0,1]),
-                AliasTable([0,0,0,0,1,0,0,0,0,0,0,0]),
                 AliasTable([1e-70,0,0,0,1]),
-                AliasTable([1e-70,0,0,0,1,0,0,0,1e-70]),
+            ],[
+                AliasTable([0,0,0,0,1,0,0,0,0,0,0,0]),
+                AliasTable([1e-70,0,0,0,1,0,0,0,0,0,0,1e-70]),
             ],[
                 AliasTable([1, 2, 3, 5]),
                 AliasTable{UInt64, Int8}([1, 2, 3, 5]),

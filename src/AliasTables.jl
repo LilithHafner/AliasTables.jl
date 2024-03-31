@@ -44,6 +44,7 @@ the index of the nonzero weight.
 struct AliasTable{T <: Unsigned, I <: Integer}
     mask::T
     probability_alias::Memory{Tuple{T, I}}
+    length::I
     """
         _AliasTable(probability_alias::Memory{Tuple{T, I}})
 
@@ -58,10 +59,10 @@ struct AliasTable{T <: Unsigned, I <: Integer}
 
     If callers fail to do this, then equality and hashing may be broken.
     """
-    function _AliasTable(probability_alias::Memory{Tuple{T, I}}) where {T, I}
+    function _AliasTable(probability_alias::Memory{Tuple{T, I}}, len) where {T, I}
         shift = 8sizeof(T) - top_set_bit(length(probability_alias)) + 1
         mask = (one(T) << shift) - one(T)
-        new{T, I}(mask, probability_alias)
+        new{T, I}(mask, probability_alias, len)
     end
     global _AliasTable
 end
@@ -74,7 +75,7 @@ function AliasTable{T, I}(weights; normalize=true) where {T <: Unsigned, I <: In
     if normalize
         (is_constant, sm) = checked_sum(weights)
         if is_constant
-            _constant_alias_table(T, I, sm)
+            _constant_alias_table(T, I, sm, length(weights))
         elseif sm == 0 # pre-normalized
             _alias_table(T, I, weights)
         else
@@ -87,7 +88,7 @@ function AliasTable{T, I}(weights; normalize=true) where {T <: Unsigned, I <: In
     end
 end
 
-function _constant_alias_table(::Type{T}, ::Type{I}, index) where {I, T}
+function _constant_alias_table(::Type{T}, ::Type{I}, index, length) where {I, T}
     bitshift = top_set_bit(index - 1)
     len = 1 << bitshift
     points_per_cell = one(T) << (8*sizeof(T) - bitshift)#typemax(T)+1 / len
@@ -96,7 +97,7 @@ function _constant_alias_table(::Type{T}, ::Type{I}, index) where {I, T}
     for i in 1:len
         probability_alias[i] = (points_per_cell, index-i)
     end
-    _AliasTable(probability_alias)
+    _AliasTable(probability_alias, length)
 end
 
 function get_only_nonzero(weights)
@@ -130,7 +131,7 @@ hot_take(xs, n) = Iterators.take(xs, n)
 
 function _alias_table(::Type{T}, ::Type{I}, weights0) where {I, T}
     onz = get_only_nonzero(weights0)
-    onz == -2 || return _constant_alias_table(T, I, onz)
+    onz == -2 || return _constant_alias_table(T, I, onz, length(weights0))
 
     # weights = Iterators.take(weights0, findlast(!iszero, weights0))
     weights = hot_take(weights0, findlast(!iszero, weights0))
@@ -228,7 +229,7 @@ function _alias_table(::Type{T}, ::Type{I}, weights0) where {I, T}
         points_per_cell == thirsty_desired && (probability_alias[thirsty_i] = (0, 0)) # loosely thirsty, but satisfied. Zero out the undef.
     end
 
-    _AliasTable(probability_alias)
+    _AliasTable(probability_alias, length(weights0))
 end
 
 """
@@ -275,17 +276,14 @@ Random.gentype(::Type{AliasTable{T, I}}) where {T, I} = I
 function probabilities(at::AliasTable{T}) where T
     bitshift = top_set_bit(length(at.probability_alias) - 1)
     points_per_cell = one(T) << (8*sizeof(T) - bitshift)#typemax(T)+1 / len
-    probs = zeros(T, length(at.probability_alias))
+    probs = zeros(T, at.length)
     for (i, (prob, alias)) in enumerate(at.probability_alias)
         probs[i + alias] += prob
-        probs[i] += points_per_cell - prob
+        keep = points_per_cell - prob
+        iszero(keep) || (probs[i] += keep)
     end
-    li = findlast(!iszero, probs)
-    if li != nothing
-        resize!(probs, li)
-    else # overflow
-        resize!(probs, sample(zero(T), at))
-        probs[end] = typemax(T)
+    if all(iszero, probs)
+        probs[sample(zero(T), at)] = typemax(T)
     end
     probs
 end
@@ -315,10 +313,11 @@ end
 # These naive implementations are equivalent to computing equality based on
 # `WithZeros(probabilities, Inf)` because the constrors are deterministic w.r.t
 # the input weights exclusind trailing zeros.
-Base.:(==)(at1::AliasTable{T}, at2::AliasTable{T}) where T = at1.probability_alias == at2.probability_alias
+Base.:(==)(at1::AliasTable{T}, at2::AliasTable{T}) where T = at1.length == at2.length && at1.probability_alias == at2.probability_alias
 function Base.:(==)(at1::AliasTable{T1}, at2::AliasTable{T2}) where {T1, T2}
-    bitshift = 8(sizeof(T1) - sizeof(T2))
+    at1.length == at2.length || return false
     length(at1.probability_alias) == length(at2.probability_alias) || return false
+    bitshift = 8(sizeof(T1) - sizeof(T2))
     for (po1, po2) in zip(at1.probability_alias, at2.probability_alias)
         po1[2] == po2[2] &&
         if bitshift > 0
@@ -337,6 +336,7 @@ Base.size(mv::MapVector) = size(mv.parent)
 Base.getindex(mv::MapVector{T, F, P}, i) where {T, F, P} = mv.f(mv.parent[i])
 function Base.hash(at::AliasTable, h::UInt)
     h ⊻= Sys.WORD_SIZE == 32 ? 0x7719cd5e : 0x0a0c5cfeeb10f090
+    h = hash(at.length, h)
     # isempty(at.probability_alias) && return hash(0, h) # This should never happen, but it makes first not throw.
     po1 = first(at.probability_alias)
     norm(x) = (ldexp(float(x[1]), -8sizeof(x[1])), x[2])
