@@ -478,10 +478,11 @@ function normalize_to_uint_frac_div(::Type{T}, v, sm) where {T <: Unsigned}
 
     sm3 = zero(T)
 
+    T2 = promote_type(widen(T), typeof(sm2))
     for (i,x) in enumerate(v2)
         # @assert x < sm2
         # @assert sm2 != 0
-        val = div(widen(T)(maybe_unsigned(x)) << 8sizeof(T), sm2) % T
+        val = div(T2(maybe_unsigned(x)) << 8sizeof(T), sm2) % T
         sm3 += val
         res[i] = val
     end

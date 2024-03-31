@@ -22,7 +22,11 @@ using RegressionTests
         @test rand(AliasTable([0, 1]), 3)::Vector{Int} == [2,2,2]
         @test rand(AliasTable{UInt, Int8}([0, 1]), 3)::Vector{Int8} == [2,2,2]
         @test rand(AliasTable([typemax(Int)-10, 5, 5, 5])) == 1
-        @test AliasTable{UInt8}([0x80, 0x80]) == AliasTable{UInt8}([0x81, 0x81]) == AliasTable([1,1])
+        @test AliasTable{UInt8}([0x80, 0x80]) ==
+              AliasTable{UInt8}([0x81, 0x81]) ==
+              AliasTable([1,1]) ==
+              AliasTable{UInt8}(UInt128[typemax(UInt64), typemax(UInt64)] .<< 5) ==
+              AliasTable{UInt8}([typemax(UInt32), typemax(UInt32)])
     end
 
     @testset "Invalid weight error messages" begin
