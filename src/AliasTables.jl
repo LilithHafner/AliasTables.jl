@@ -347,7 +347,6 @@ end
 
 maybe_unsigned(x) = x # this is necessary to avoid calling unsigned on BigInt, Flaot64, etc.
 maybe_unsigned(x::Base.BitSigned) = unsigned(x)
-maybe_unsigned(x::Type{T}) where T <: Base.BitInteger = isconcretetype(x) ? unsigned(x) : x
 
 maybe_add_with_overflow(x::Base.BitInteger, y::Base.BitInteger) = Base.Checked.add_with_overflow(x, convert(typeof(x), y))
 maybe_add_with_overflow(x, y) = x+y, false
