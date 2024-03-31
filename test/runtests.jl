@@ -143,6 +143,6 @@ using RegressionTests
     end
 
     @testset "RegressionTests" begin
-        RegressionTests.test(skip_unsupported_platforms=true)
+        "CI" ∈ keys(ENV) && RegressionTests.test(skip_unsupported_platforms=true)
     end
 end
