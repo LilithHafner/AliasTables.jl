@@ -22,6 +22,12 @@ using RegressionTests
         @test rand(AliasTable([0, 1]), 3)::Vector{Int} == [2,2,2]
         @test rand(AliasTable{UInt, Int8}([0, 1]), 3)::Vector{Int8} == [2,2,2]
         @test rand(AliasTable([typemax(Int)-10, 5, 5, 5])) == 1
+        @test AliasTable{UInt8}([0x80, 0x80]) ==
+              AliasTable{UInt8}([0x81, 0x81]) ==
+              AliasTable([1,1]) ==
+              AliasTable{UInt8}(UInt128[typemax(UInt64), typemax(UInt64)] .<< 5) ==
+              AliasTable{UInt8}([typemax(UInt32), typemax(UInt32)])
+        @test rand(AliasTable{UInt8}(fill(0x80, 2^18))) in 1:2^18
     end
 
     @testset "Invalid weight error messages" begin
@@ -44,6 +50,10 @@ using RegressionTests
         @test AliasTables.probabilities(float, AliasTable([1, 2, 3])) == [1, 2, 3]/6
         @test AliasTables.probabilities(float, AliasTable([1, 2, 3, 0, 0])) == [1, 2, 3, 0, 0]/6
         @test AliasTables.probabilities(AliasTable([1, 2, 3, 0, 2])) == [1, 2, 3, 0, 2] .<< 61
+        p = AliasTables.probabilities(AliasTable{UInt8}(fill(0x80, 2^18)))
+        @test p isa Vector{UInt8}
+        @test sum(p) == 256
+        @test all(∈(0:1), p)
     end
 
     @testset "sample()" begin

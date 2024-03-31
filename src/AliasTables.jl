@@ -76,7 +76,7 @@ function AliasTable{T, I}(weights; normalize=true) where {T <: Unsigned, I <: In
         (is_constant, sm) = checked_sum(weights)
         if is_constant
             _constant_alias_table(T, I, sm, length(weights))
-        elseif sm == 0 # pre-normalized
+        elseif sm-true == typemax(T) # pre-normalized
             _alias_table(T, I, weights)
         else
             # norm = normalize_to_uint_lazy_frac_div(T, weights, sm)
@@ -400,12 +400,6 @@ function normalize_to_uint(::Type{T}, v::AbstractVector{<:Real}) where {T <: Uns
     res
 end
 
-function frac_div(x::T, y::T) where T <: Unsigned
-    # @assert x < y
-    # @assert y != 0
-    div(widen(x) << 8sizeof(T), y) % T
-end
-
 ####
 
 # 2-4 passes (skip first two if nomralize = false)
@@ -469,7 +463,7 @@ end
 #     (frac_div(T(x), sm) + (i <= bonus) for (i,x) in enumerate(weights))
 # end
 
-function normalize_to_uint_frac_div(::Type{T}, v, sm=sum(T,v)) where {T <: Unsigned}
+function normalize_to_uint_frac_div(::Type{T}, v, sm) where {T <: Unsigned}
     if sm isa AbstractFloat
         shift = 8sizeof(T)-exponent(sm + sqrt(eps(sm)))-1
         v2 = res = [floor(T, ldexp(x, shift)) for x in v]
@@ -484,13 +478,16 @@ function normalize_to_uint_frac_div(::Type{T}, v, sm=sum(T,v)) where {T <: Unsig
 
     sm3 = zero(T)
 
+    T2 = promote_type(widen(T), typeof(sm2))
     for (i,x) in enumerate(v2)
-        val = frac_div(T(x), T(sm2))
+        # @assert x < sm2
+        # @assert sm2 != 0
+        val = div(T2(maybe_unsigned(x)) << 8sizeof(T), sm2) % T
         sm3 += val
         res[i] = val
     end
 
-    sm3 == 0 && return res
+    sm3 == 0 && any(!iszero(res)) && return res
 
     for i in sm3:typemax(sm3)
         res[typemax(sm3)-i+1] += true
