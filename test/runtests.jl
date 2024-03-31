@@ -40,6 +40,12 @@ using RegressionTests
         @test AliasTables.probabilities(float, AliasTable(UInt[unsigned(3)<<61, unsigned(2)<<61, unsigned(3)<<61], normalize=false)) == [3,2,3] ./ 8
     end
 
+    @testset "probabilities()" begin
+        @test AliasTables.probabilities(float, AliasTable([1, 2, 3])) == [1, 2, 3]/6
+        @test AliasTables.probabilities(float, AliasTable([1, 2, 3, 0, 0])) == [1, 2, 3, 0, 0]/6
+        @test AliasTables.probabilities(AliasTable([1, 2, 3, 0, 2])) == [1, 2, 3, 0, 2] .<< 61
+    end
+
     @testset "sample()" begin
         @test Base.hasmethod(AliasTables.sample, Tuple{UInt, AliasTable{UInt, Int}})
         @test Base.hasmethod(AliasTables.sample, Tuple{Random.MersenneTwister, AliasTable{UInt, Int}})
@@ -85,25 +91,28 @@ using RegressionTests
     @testset "Equality and hashing" begin
         a = AliasTable([1, 2, 3])
         b = AliasTable([1, 2, 3, 0, 0])
-        @test a == b
+        @test a != b
+        @test a.probability_alias == b.probability_alias
 
         data = [
             [
                 AliasTable([1, 2, 5]),
                 AliasTable([2, 4, 10]),
                 AliasTable([1, 2, 5] * 1729),
-                AliasTable([1, 2, 5, 0, 0]),
                 AliasTable{UInt16, Int32}([1,2,5]),
                 AliasTable{UInt16}([1,2,5]),
                 AliasTable{UInt, Int32}([1,2,5]),
                 AliasTable(UInt[unsigned(1)<<61, unsigned(2)<<61, unsigned(5)<<61]),
             ],[
+                AliasTable([1, 2, 5, 0, 0]),
+            ],[
                 AliasTable([1, 2.0001, 5]),
             ],[
                 AliasTable([0,0,0,0,1]),
-                AliasTable([0,0,0,0,1,0,0,0,0,0,0,0]),
                 AliasTable([1e-70,0,0,0,1]),
-                AliasTable([1e-70,0,0,0,1,0,0,0,1e-70]),
+            ],[
+                AliasTable([0,0,0,0,1,0,0,0,0,0,0,0]),
+                AliasTable([1e-70,0,0,0,1,0,0,0,0,0,0,1e-70]),
             ],[
                 AliasTable([1, 2, 3, 5]),
                 AliasTable{UInt64, Int8}([1, 2, 3, 5]),
