@@ -66,7 +66,7 @@ struct AliasTable{T <: Unsigned, I <: Integer}
     global _AliasTable
 end
 
-AliasTable(weights::AbstractVector{<:Real}; normalize=true) = AliasTable{UInt, Int}(weights; normalize=normalize)
+AliasTable(weights::AbstractVector{<:Real}; normalize=true) = AliasTable{UInt64, Int}(weights; normalize=normalize)
 AliasTable{T}(weights::AbstractVector{<:Real}; normalize=true) where T <: Unsigned = AliasTable{T, Int}(weights; normalize=normalize)
 function AliasTable{T, I}(weights; normalize=true) where {T <: Unsigned, I <: Integer}
     # function _AliasTable(::Type{T}, ::Type{I}, weights; normalize=true) where {T <: Unsigned, I <: Integer}
@@ -297,7 +297,7 @@ probabilities(::typeof(float), at::AliasTable{T}) where T =
 ### Show
 function Base.show(io::IO, at::AliasTable{T, I}) where {T, I}
     print(io, AliasTable)
-    if get(io, :typeinfo, nothing) != AliasTable{T, I} && (T != UInt || I != Int)
+    if get(io, :typeinfo, nothing) != AliasTable{T, I} && (T != UInt64 || I != Int)
         if I == Int
             print(io, "{", T, "}")
         else
