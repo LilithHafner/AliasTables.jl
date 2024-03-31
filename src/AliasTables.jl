@@ -42,6 +42,7 @@ not checked and the `AliasTable` represents a constant distribution which always
 the index of the nonzero weight.
 """
 struct AliasTable{T <: Unsigned, I <: Integer}
+    mask::T
     probability_alias::Memory{Tuple{T, I}}
     """
         _AliasTable(probability_alias::Memory{Tuple{T, I}})
@@ -57,7 +58,11 @@ struct AliasTable{T <: Unsigned, I <: Integer}
 
     If callers fail to do this, then equality and hashing may be broken.
     """
-    _AliasTable(probability_alias::Memory{Tuple{T, I}}) where {T, I} = new{T, I}(probability_alias)
+    function _AliasTable(probability_alias::Memory{Tuple{T, I}}) where {T, I}
+        shift = 8sizeof(T) - top_set_bit(length(probability_alias)) + 1
+        mask = (one(T) << shift) - one(T)
+        new{T, I}(mask, probability_alias)
+    end
     global _AliasTable
 end
 
@@ -239,10 +244,10 @@ as well.
 See also [`AliasTable`](@ref)
 """
 function sample(x::T, ot::AliasTable{T, I}) where {T, I}
-    count_ones(length(ot.probability_alias)) == 1 || return zero(I) # This should never happen, but it makes the @inbounds safe
     shift = 8sizeof(T) - top_set_bit(length(ot.probability_alias)) + 1
     cell = (x >> shift) + 1
-    val = x & ((one(T) << shift) - one(T))
+    # @assert (one(T) << shift) - one(T) == ot.mask
+    val = x & ot.mask
     @inbounds prob, alias = ot.probability_alias[cell%Int]
     # (val < prob ? (alias+cell) : I(cell))::I
     # I((val < prob) * alias + cell)::I
