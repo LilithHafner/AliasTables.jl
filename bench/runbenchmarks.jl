@@ -4,13 +4,13 @@ load_time = @elapsed using AliasTables
 @track load_time
 
 x = rand(10)
-ttf_construction = @elapsed ot = AliasTable(x)
+ttf_construction = @elapsed at = AliasTable(x)
 @track ttf_construction
 
-ttf_sample = @elapsed rand(ot)
+ttf_sample = @elapsed rand(at)
 @track ttf_sample
 
-ttf_sample_multi = @elapsed rand(ot, 30)
+ttf_sample_multi = @elapsed rand(at, 30)
 @track ttf_sample_multi
 
 for n in [1, 10, 100, 1000]

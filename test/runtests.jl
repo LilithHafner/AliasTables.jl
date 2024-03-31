@@ -49,11 +49,11 @@ using RegressionTests
     @testset "Exact" begin
         for i in 1:100
             p = rand(i)
-            ot = AliasTable(p)
-            @test maximum(abs, AliasTables.probabilities(ot) ./ (big(typemax(UInt))+1) .- p ./ sum(big, p)) ≤ .5^64
-            @test AliasTables.probabilities(float, ot) ≈  p ./ sum(p)
-            @test AliasTable(AliasTables.probabilities(ot)) == ot
-            # @test AliasTable(AliasTables.probabilities(float, ot)) == ot
+            at = AliasTable(p)
+            @test maximum(abs, AliasTables.probabilities(at) ./ (big(typemax(UInt))+1) .- p ./ sum(big, p)) ≤ .5^64
+            @test AliasTables.probabilities(float, at) ≈  p ./ sum(p)
+            @test AliasTable(AliasTables.probabilities(at)) == at
+            # @test AliasTable(AliasTables.probabilities(float, at)) == at
 
             if i == 1
                 p2 = [typemax(UInt)]
@@ -61,12 +61,12 @@ using RegressionTests
                 p2 = floor.(UInt, (typemax(UInt)/sum(p)) .* p)
                 p2[end] = typemax(UInt) - sum(p2[1:end-1]) + 1
             end
-            ot2 = AliasTable(p2)
-            @test maximum(abs, AliasTables.probabilities(ot2) ./ (big(typemax(UInt))+1) .- p2 ./ sum(big, p2)) ≤ .5^64
-            @test AliasTables.probabilities(ot2) == p2
-            @test AliasTables.probabilities(float, ot2) ≈  p ./ sum(p)
-            # @test AliasTable(AliasTables.probabilities(float, ot2)) == ot2
-            @test AliasTable(AliasTables.probabilities(ot2)) == ot2
+            at2 = AliasTable(p2)
+            @test maximum(abs, AliasTables.probabilities(at2) ./ (big(typemax(UInt))+1) .- p2 ./ sum(big, p2)) ≤ .5^64
+            @test AliasTables.probabilities(at2) == p2
+            @test AliasTables.probabilities(float, at2) ≈  p ./ sum(p)
+            # @test AliasTable(AliasTables.probabilities(float, at2)) == at2
+            @test AliasTable(AliasTables.probabilities(at2)) == at2
         end
 
         function counts(x, levels)
@@ -76,8 +76,8 @@ using RegressionTests
             end
             c
         end
-        let ot = AliasTable{UInt16}([10, 5, 1])
-            @test counts(Iterators.map(x -> AliasTables.sample(x, ot), typemin(UInt16):typemax(UInt16)), 3) ==
+        let at = AliasTable{UInt16}([10, 5, 1])
+            @test counts(Iterators.map(x -> AliasTables.sample(x, at), typemin(UInt16):typemax(UInt16)), 3) ==
                 2^16/16 * [10, 5, 1]
         end
     end

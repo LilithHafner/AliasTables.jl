@@ -23,10 +23,10 @@ the random API, this latter approach is taken.
 ```julia
 julia> using AliasTables
 
-julia> ot = AliasTable([5,10,1])
+julia> at = AliasTable([5,10,1])
 AliasTable([(0x2000000000000000, 1), (0x0000000000000000, 0), (0x3000000000000000, -2), (0x4000000000000000, -2)])
 
-julia> rand(ot, 10)
+julia> rand(at, 10)
 10-element Vector{Int64}:
  2
  1
@@ -41,7 +41,7 @@ julia> rand(ot, 10)
 
 julia> using Chairmarks
 
-julia> @b ot rand
+julia> @b at rand
 2.990 ns
 
 julia> @b rand(UInt)
@@ -53,10 +53,10 @@ julia> @b rand(1000) AliasTable
 julia> @b AliasTable(rand(1000)) rand(_, 1000)
 1.420 μs (3 allocs: 7.875 KiB)
 
-julia> ot = AliasTable{UInt16}([5,10,1])
+julia> at = AliasTable{UInt16}([5,10,1])
 AliasTable{UInt16}([(0x2000, 1), (0x0000, 0), (0x3000, -2), (0x4000, -2)])
 
-julia> countmap(AliasTables.sample(x, ot) for x in typemin(UInt16):typemax(UInt16))
+julia> countmap(AliasTables.sample(x, at) for x in typemin(UInt16):typemax(UInt16))
 Dict{Any, Int64} with 3 entries:
   2 => 40960
   3 => 4096
