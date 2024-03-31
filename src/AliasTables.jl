@@ -93,9 +93,7 @@ function _constant_alias_table(::Type{T}, ::Type{I}, index) where {I, T}
     points_per_cell = one(T) << (8*sizeof(T) - bitshift)#typemax(T)+1 / len
 
     probability_alias = Memory{Tuple{T, I}}(undef, len)
-    for i in 1:len
-        probability_alias[i] = (points_per_cell, index-i)
-    end
+    probability_alias .= ((points_per_cell, index),)
     _AliasTable(probability_alias)
 end
 
@@ -162,7 +160,7 @@ function _alias_table(::Type{T}, ::Type{I}, weights0) where {I, T}
                 thirsty_desired >= points_per_cell && break
             end
             excess = points_per_cell - current_desired                             # Assign this many extra points
-            probability_alias[current_i] = (excess, thirsty_i-current_i)          # To the targeted cell
+            probability_alias[current_i] = (excess, thirsty_i)                     # To the targeted cell
             current_i = thirsty_i                                                  # Now we have to make sure that thristy cell gets exactly what it wants and no more
             current_desired = thirsty_desired - excess                             # It wants what it wants and hasn't already been transferred
         else                                 # Thirsty (loose)
@@ -173,7 +171,7 @@ function _alias_table(::Type{T}, ::Type{I}, weights0) where {I, T}
                 surplus_desired < points_per_cell && break
             end
             excess = points_per_cell - surplus_desired                             # Assign this many extra points
-            probability_alias[surplus_i] = (excess, current_i-surplus_i)          # From the cell with surplus to this cell
+            probability_alias[surplus_i] = (excess, current_i)                     # From the cell with surplus to this cell
             current_desired -= excess                                              # We now don't want as many points (and may even no longer be thristy)
         end
     end
@@ -198,7 +196,7 @@ function _alias_table(::Type{T}, ::Type{I}, weights0) where {I, T}
                 thirsty_desired >= points_per_cell && break
             end
             excess = points_per_cell - current_desired                             # Assign this many extra points
-            probability_alias[current_i] = (excess, thirsty_i-current_i)          # To the targeted cell
+            probability_alias[current_i] = (excess, thirsty_i)                     # To the targeted cell
             current_i = thirsty_i                                                  # Now we have to make sure that thristy cell gets exactly what it wants and no more
             current_desired = thirsty_desired - excess                             # It wants what it wants and hasn't already been transferred
         else                                 # Thirsty (loose)
@@ -206,7 +204,7 @@ function _alias_table(::Type{T}, ::Type{I}, weights0) where {I, T}
             surplus_state_2 > len && break # If there is no surplus cell, handle below
             surplus_i = surplus_state_2
             excess = points_per_cell                                               # Assign all the points
-            probability_alias[surplus_i] = (points_per_cell, current_i-surplus_i) # From the synthetic cell with surplus to this cell
+            probability_alias[surplus_i] = (points_per_cell, current_i)            # From the synthetic cell with surplus to this cell
             current_desired -= excess                                              # We now don't want as many points (and may even no longer be thristy)
         end
     end
@@ -216,7 +214,7 @@ function _alias_table(::Type{T}, ::Type{I}, weights0) where {I, T}
     if points_per_cell < current_desired  # Strictly thirsty, and no surplus cells, so exceed the desired weight.
         throw(ArgumentError("sum(weights) is too high"))
     end
-    probability_alias[current_i] = (0, 0)
+    probability_alias[current_i] = (0, current_i) # use current_i instead of 0 so it's inbounds
     # Just right. There are no surplus cells left and no current surplus or thirst. All
     # that's left are future loosely thirsty cells, all of which should be a thirst of
     # exactly 0.
@@ -225,7 +223,7 @@ function _alias_table(::Type{T}, ::Type{I}, weights0) where {I, T}
         ix === nothing && break # Out of thirsty cells, yay!
         (thirsty_i, thirsty_desired), thirsty_state = ix
         points_per_cell < thirsty_desired && throw(ArgumentError("sum(weights) is too high")) # Strictly thirsty, with no surplus to draw from.
-        points_per_cell == thirsty_desired && (probability_alias[thirsty_i] = (0, 0)) # loosely thirsty, but satisfied. Zero out the undef.
+        points_per_cell == thirsty_desired && (probability_alias[thirsty_i] = (0, thirsty_i)) # loosely thirsty, but satisfied. Zero out the undef.
     end
 
     _AliasTable(probability_alias)
@@ -249,9 +247,7 @@ function sample(x::T, ot::AliasTable{T, I}) where {T, I}
     # @assert (one(T) << shift) - one(T) == ot.mask
     val = x & ot.mask
     @inbounds prob, alias = ot.probability_alias[cell%Int]
-    # (val < prob ? (alias+cell) : I(cell))::I
-    # I((val < prob) * alias + cell)::I
-    (((val < prob) * alias + cell)%I)::I
+    ifelse(val < prob, alias, cell%I)::I
 end
 
 """
@@ -277,7 +273,7 @@ function probabilities(ot::AliasTable{T}) where T
     points_per_cell = one(T) << (8*sizeof(T) - bitshift)#typemax(T)+1 / len
     probs = zeros(T, length(ot.probability_alias))
     for (i, (prob, alias)) in enumerate(ot.probability_alias)
-        probs[i + alias] += prob
+        probs[alias] += prob
         probs[i] += points_per_cell - prob
     end
     li = findlast(!iszero, probs)
