@@ -40,6 +40,11 @@ using RegressionTests
         @test AliasTables.probabilities(float, AliasTable(UInt[unsigned(3)<<61, unsigned(2)<<61, unsigned(3)<<61], normalize=false)) == [3,2,3] ./ 8
     end
 
+    @testset "probabilities()" begin
+        @test AliasTables.probabilities(float AliasTable([1, 2, 3])) == [1, 2, 3]/6
+        @test AliasTables.probabilities(float AliasTable([1, 2, 3, 0, 0])) == [1, 2, 3, 0, 0]/6
+    end
+
     @testset "sample()" begin
         @test Base.hasmethod(AliasTables.sample, Tuple{UInt, AliasTable{UInt, Int}})
         @test Base.hasmethod(AliasTables.sample, Tuple{Random.MersenneTwister, AliasTable{UInt, Int}})
