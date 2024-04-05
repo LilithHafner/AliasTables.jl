@@ -1,8 +1,6 @@
 using AliasTables
-using Test
-using Aqua
-using Random
-using RegressionTests
+using Test, Aqua, RegressionTests
+using Random, OffsetArrays
 
 @testset "AliasTables.jl" begin
     @testset "Code quality (Aqua.jl)" begin
@@ -44,6 +42,8 @@ using RegressionTests
         @test_throws ArgumentError("sum(weights) overflows") AliasTable(UInt[unsigned(3)<<62, unsigned(2)<<62, unsigned(3)<<62])
         @test AliasTables.probabilities(float, AliasTable(UInt[unsigned(3)<<61, unsigned(2)<<61, unsigned(3)<<61])) == [3,2,3] ./ 8
         @test AliasTables.probabilities(float, AliasTable(UInt[unsigned(3)<<61, unsigned(2)<<61, unsigned(3)<<61], normalize=false)) == [3,2,3] ./ 8
+        @test_throws ArgumentError("offset arrays are not supported but got an array with index other than 1") AliasTable(OffsetVector([1,2], 1))
+        @test AliasTable(OffsetVector([1,2], 0)) == AliasTable([1,2])
     end
 
     @testset "probabilities()" begin
@@ -170,6 +170,10 @@ using RegressionTests
             repr_test([AliasTable{UInt16}([1, 2, 5]), AliasTable{UInt16}([0.0,1.0])]::Vector{AliasTable{UInt16, Int}}, "[AliasTable{UInt16}([0x2000, 0x4000, 0xa000]), AliasTable{UInt16}([0x0000, 0xffff])]")
             repr_test([AliasTable{UInt16}([1, 2, 5]), AliasTable([0.0,1.0])]::Vector{<:AliasTable}, "[AliasTable{UInt16}([0x2000, 0x4000, 0xa000]), AliasTable([0x0000000000000000, 0xffffffffffffffff])]")
         end
+    end
+
+    @testset "Misc" begin
+        AliasTables._alias_table(UInt8, Int, (0x01, 0xff)) == AliasTable([1,255])
     end
 
     @testset "RegressionTests" begin
