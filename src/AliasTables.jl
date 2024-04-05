@@ -100,6 +100,11 @@ function _constant_alias_table(::Type{T}, ::Type{I}, index, length) where {I, T}
     _AliasTable(probability_alias, length)
 end
 
+function throw_on_negatives(weights)
+    for w in weights
+        w < 0 && throw(ArgumentError("found negative weight $w"))
+    end
+end
 function get_only_nonzero(weights)
     only_nonzero = -1
     for (i, w) in enumerate(weights)
@@ -110,8 +115,6 @@ function get_only_nonzero(weights)
                 only_nonzero = -2
                 break
             end
-        elseif w < 0
-            throw(ArgumentError("found negative weight $w at index $i"))
         end
     end
     only_nonzero == -1 && throw(ArgumentError("all weights are zero"))
@@ -130,6 +133,7 @@ hot_take(xs::Array, n) = HotTake(xs, n)
 hot_take(xs, n) = Iterators.take(xs, n)
 
 function _alias_table(::Type{T}, ::Type{I}, weights0) where {I, T}
+    throw_on_negatives(weights0)
     onz = get_only_nonzero(weights0)
     onz == -2 || return _constant_alias_table(T, I, onz, length(weights0))
 

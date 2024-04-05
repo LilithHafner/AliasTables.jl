@@ -31,6 +31,7 @@ using Random, OffsetArrays
     @testset "Invalid weight error messages" begin
         @test_throws ArgumentError("found negative weight -1") AliasTable([1, -1])
         @test_throws ArgumentError("found negative weight -1") AliasTable([1, 1, -1])
+        @test_throws ArgumentError("found negative weight -1") AliasTable([3, typemax(Int), -1, typemax(Int)], normalize=false)
         @test_throws ArgumentError("all weights are zero") AliasTable([0, 0])
         @test_throws ArgumentError("all weights are zero") AliasTable([0])
         @test_throws ArgumentError("all weights are zero") AliasTable(UInt[0, 0])
