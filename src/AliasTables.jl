@@ -350,55 +350,6 @@ maybe_unsigned(x::Base.BitSigned) = unsigned(x)
 maybe_add_with_overflow(x::Base.BitInteger, y::Base.BitInteger) = Base.Checked.add_with_overflow(x, convert(typeof(x), y))
 maybe_add_with_overflow(x, y) = x+y, false
 
-function normalize_to_uint(::Type{T}, v::AbstractVector{<:Real}) where {T <: Unsigned}
-    only_nonzero = -1
-    sm = maybe_unsigned(Base.add_sum(zero(eltype(v)), zero(eltype(v))))
-    overflow = false
-    for (i, w) in enumerate(v)
-        if only_nonzero != 0 && w > 0
-            if only_nonzero == -1
-                only_nonzero = i
-            else
-                only_nonzero = 0
-            end
-        elseif w < 0
-            throw(ArgumentError("found negative weight $w at index $i"))
-        end
-        sm, o = maybe_add_with_overflow(sm, w)
-        sm != 0 && o && throw(ArgumentError("sum(weights) overflows"))
-        overflow |= o
-    end
-    only_nonzero == -1 && throw(ArgumentError("all weights are zero"))
-    if only_nonzero != 0
-        res = zeros(T, length(v))
-        res[only_nonzero] = 1
-        return res
-    end
-    overflow && typemax(T) == typemax(eltype(v)) && return v
-    overflow && throw(ArgumentError("sum(weights) overflows"))
-
-    length(v) <= 1 && return ones(T, length(v))
-    sm2 = sm # https://github.com/JuliaLang/julia/issues/15276
-    res = [x <= typemax(T) ? floor(T, x) : typemax(T) for x in (ldexp(x/sm2, 8sizeof(T)) for x in v)] # TODO: make this lazy & non-allocating
-
-    count_nonzero = 0
-    for x in res
-        if x != 0
-            count_nonzero += 1
-            count_nonzero > 1 && break
-        end
-    end
-    @assert count_nonzero != 0
-    count_nonzero == 1 && return res # No need to normalize
-
-    leftover = signed(sum(widen, res) - typemax(T)-1)
-    argmx = argmax(res)
-    if (res[argmx] -= leftover) < 0
-        throw(ArgumnetError("normalization failed")) # TODO: eliminate this
-    end
-    res
-end
-
 ####
 
 # 2-4 passes (skip first two if nomralize = false)
