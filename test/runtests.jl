@@ -58,7 +58,7 @@ using RegressionTests
 
     @testset "sample()" begin
         @test Base.hasmethod(AliasTables.sample, Tuple{UInt, AliasTable{UInt, Int}})
-        @test Base.hasmethod(AliasTables.sample, Tuple{Random.MersenneTwister, AliasTable{UInt, Int}})
+        @test !Base.hasmethod(AliasTables.sample, Tuple{Random.MersenneTwister, AliasTable{UInt, Int}})
         @test !Base.hasmethod(AliasTables.sample, Tuple{UInt32, AliasTable{UInt64, Int}})
     end
 

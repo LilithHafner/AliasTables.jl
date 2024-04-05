@@ -3,7 +3,7 @@ module AliasTables
 using Random
 
 export AliasTable
-VERSION >= v"1.11.0-DEV.469" && eval(Meta.parse("public sample"))
+VERSION >= v"1.11.0-DEV.469" && eval(Meta.parse("public sample, probabilities"))
 
 const Memory = isdefined(Base, :Memory) ? Base.Memory : Vector # VERSION <= 1.10
 
@@ -242,7 +242,7 @@ the output will be a random sample from the distribution represented by `at`. Th
 deterministic and not pseudo-random so for patterned input `x` the output will be patterned
 as well.
 
-See also [`AliasTable`](@ref)
+See also [`AliasTable`](@ref), [`AliasTables.probabilities`](@ref)
 """
 function sample(x::T, at::AliasTable{T, I}) where {T, I}
     shift = 8sizeof(T) - top_set_bit(length(at.probability_alias)) + 1
@@ -255,24 +255,20 @@ function sample(x::T, at::AliasTable{T, I}) where {T, I}
     (((val < prob) * alias + cell)%I)::I
 end
 
-"""
-    sample(rng::Random.AbstractRNG, at::AliasTable{T, I}) -> I
-
-Sample from `at` using randomness drawn from `rng`.
-
-Produces a random sample from the distribution represented by `at`.
-
-See also [`AliasTable`](@ref), `Random.rand`
-"""
-function sample(rng::Random.AbstractRNG, at::AliasTable{T, I}) where {T, I}
-    sample(rand(rng, T), at)
-end
-
 ### Random API
-Random.rand(rng::Random.AbstractRNG, at::Random.SamplerTrivial{<:AliasTable}) = sample(rng, at.self)
+Random.rand(rng::Random.AbstractRNG, at::Random.SamplerTrivial{<:AliasTable{T}}) where T = sample(rand(rng, T), at.self)
 Random.gentype(::Type{AliasTable{T, I}}) where {T, I} = I
 
 ### Reconstruct probabilities
+"""
+    probabilities(at::AliasTable{T}) -> Vector{T}
+
+Recover the exact sampling weights from a given `AliasTable`. The returned values will
+sum to one more than `typemax(T)`, unless `at` is a constant distribution (e.g.
+`AliasTable([0,1,0])`), in which case the weights will sum to `typemax(T)`.
+
+See also [`AliasTable`](@ref), [`AliasTables.sample`](@ref)
+"""
 function probabilities(at::AliasTable{T}) where T
     bitshift = top_set_bit(length(at.probability_alias) - 1)
     points_per_cell = one(T) << (8*sizeof(T) - bitshift)#typemax(T)+1 / len
@@ -288,6 +284,13 @@ function probabilities(at::AliasTable{T}) where T
     probs
 end
 
+"""
+    probabilities(float, at::AliasTable{T}) -> Vector{<:AbstractFloat}
+
+
+Return the sampling probabilities of `at`. The returned vector will sum to 1.0, up to
+rounding error.
+"""
 probabilities(::typeof(float), at::AliasTable{T}) where T =
     probabilities(at) ./ (float(typemax(T))+1)
 
