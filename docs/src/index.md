@@ -10,21 +10,20 @@ CurrentModule = AliasTables
 
 ## Constructing an AliasTable
 
-Construct an AliasTable by calling `AliasTable(probabilities)` for some collection of
-probabilities. For example, to create a table with a 30% chance of returning 1, and a 70%
-chance of returning 2, you would call `AliasTable([0.3, 0.7])`.
+Construct an AliasTable by calling [`AliasTable(probabilities)`](@ref) for some collection 
+of probabilities. For example, to create a table with a 30% chance of returning 1, and a 
+70% chance of returning 2, you would call `AliasTable([0.3, 0.7])`.
 
 `probabilities` may be a vector, or any other iterator. Its elements may be Float64, or any
-other real number. The sum need not be 1 as the input will automatically be normalized.
-
-See [the docstring](@ref AliasTable) for more info
+other real number. The sum need not be 1 as the input will be automatically normalized.
 
 ## Sampling from an AliasTable
 
 Sample from an `AliasTable` the same way you would sample from any sampleable object using
 the Random API. For example, to draw a single sample, call `rand(at::AliasTable)`, to draw
-`n` samples, call `rand(at::AliasTable, n)`, and to sample using a specific random number
-generator, call `rand(rng::Random.AbstractRNG, at::AliasTable)`.
+`n` samples, call `rand(at::AliasTable, n)`, to sample using a specific random number
+generator, call `rand(rng::Random.AbstractRNG, at::AliasTable)`, and to populate an 
+existing array, call `rand!(x, at::AliasTable)`.
 
 ## Example
 
@@ -49,8 +48,8 @@ julia> rand(at, 8)
 ## Implementation details
 
 Alias tables are composed of a list of (acceptance probability, alias) pairs. To sample from
-an alias table, first pick an element `(p, alias)` that list uniformly at random. Then, with
-probability `p`, return the index of that element and with probability `1-p`, return
+an alias table, first pick an element `(p, alias)` from that list uniformly at random. Then,
+with probability `p`, return the index of that element and with probability `1-p`, return
 `alias`. For more information, see the
 [wikipedia article](https://en.wikipedia.org/wiki/Alias_method), or a publication by the
 original author [Walker, A. J. "An Efficient
