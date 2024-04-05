@@ -29,11 +29,8 @@ that the number of values maped to a given index of `weights` is proportional to
 at that index.
 
 The mapping can be accessed directly via
-[`AliasTables.sample(x::T, at::AliasTable{T, I})`](@ref AliasTables.sample(::T, ::AliasTable{T, I}) where {T, I})
-or indirectly by passing a random number generator which will be used to generate a
-random input of type `T` for you via
-[`AliasTables.sample(rng::Random.AbstractRNG, at::AliasTable{T, I})`](@ref AliasTables.sample(::Random.AbstractRNG, ::AliasTable))
-or simply via the `Random` API: `rand(at)`, `rand(rng, at)`, `rand(at, dims...)`, etc.
+[`AliasTables.sample(x::T, at::AliasTable{T, I})`](@ref AliasTables.sample)
+or indirectly via the `Random` API: `rand(at)`, `rand(rng, at)`, `rand(at, dims...)`, etc.
 
 Set `normalize = false` for incrased performance when the weights are already normalized to
 sum to exactly the number of values representable by `T` (i.e. `typemax(T)+1`). A different
