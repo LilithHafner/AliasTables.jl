@@ -10,8 +10,8 @@ CurrentModule = AliasTables
 
 ## Constructing an AliasTable
 
-Construct an AliasTable by calling [`AliasTable(probabilities)`](@ref) for some collection 
-of probabilities. For example, to create a table with a 30% chance of returning 1, and a 
+Construct an AliasTable by calling [`AliasTable(probabilities)`](@ref) for some collection
+of probabilities. For example, to create a table with a 30% chance of returning 1, and a
 70% chance of returning 2, you would call `AliasTable([0.3, 0.7])`.
 
 `probabilities` may be a vector, or any other iterator. Its elements may be Float64, or any
@@ -22,7 +22,7 @@ other real number. The sum need not be 1 as the input will be automatically norm
 Sample from an `AliasTable` the same way you would sample from any sampleable object using
 the Random API. For example, to draw a single sample, call `rand(at::AliasTable)`, to draw
 `n` samples, call `rand(at::AliasTable, n)`, to sample using a specific random number
-generator, call `rand(rng::Random.AbstractRNG, at::AliasTable)`, and to populate an 
+generator, call `rand(rng::Random.AbstractRNG, at::AliasTable)`, and to populate an
 existing array, call `rand!(x, at::AliasTable)`.
 
 ## Example
@@ -94,12 +94,12 @@ some integer `p`.
 ## Alternate sampling API
 
 You can bypass the Random API and sample directly from an `AliasTable` using the public
-`AliasTables.sample(x::T, at::AliasTable{T})` method which is branchless, deterministic,
-and not pseudorandom. If given an input drawn uniformly at random from the domain of
-`T`, this method will produce a sample drawn from the distribution represented by `at`.
+[`AliasTables.sample`](@ref) function which is branchless, deterministic, and not
+pseudorandom. If given an input drawn uniformly at random from the domain of `T`, this
+method will produce a sample drawn from the distribution represented by `at`.
 
 ```@docs; canonical=false
-AliasTables.sample(::T, ::AliasTable{T, I}) where {T, I}
+AliasTables.sample
 ```
 
 ## Performance characteristics
@@ -128,23 +128,22 @@ julia> @b rand(UInt64, 1000)
 606.870 ns (3 allocs: 7.875 KiB)
 ```
 
-Bulk generation of UInt64 has hand written llvm instructions to support simd, while alias
-tables don't simd as nicely and have not been as aggressively optimized; hence the
+Bulk generation of UInt64 has hand written llvm instructions to support SIMD, while alias
+tables don't SIMD as nicely and have not been as aggressively optimized; hence the
 difference in bulk generation time while scalar generation time is similar.
 
 ## Docstrings
 
-The docstring for the `AliasTable` constructor defines the API for constructing
-`AliasTable`s and the `AliasTables.sample` function provides an alternative API for sampling
-from `AliasTable`s, but the primary sampling API is the Random API. Alias tables may be used
-as a sampling domain according to the specifications layed out by the Random stdlib.
+The docstring for the [`AliasTable`](@ref) constructor defines the API for constructing
+`AliasTable`s, the [`AliasTables.probabilities`](@ref) function allows recovery of the exact
+sampling probabilities provided by an `AliasTable`, and the [`AliasTables.sample`](@ref)
+function provides an alternative API for sampling from `AliasTable`s.
+
+However, the primary sampling API is the Random API. `AliasTable`s may be used as a sampling
+domain according to the specifications layed out by the Random stdlib.
 
 ```@docs
 AliasTable
-AliasTables.sample(::T, ::AliasTable{T, I}) where {T, I}
-```
-
-To be removed
-```@docs
-AliasTables.sample(::Random.AbstractRNG, ::AliasTable)
+AliasTables.sample
+AliasTables.probabilities
 ```
