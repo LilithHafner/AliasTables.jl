@@ -4,7 +4,7 @@
 [![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://aliastables.lilithhafner.com/dev)
 [![Build Status](https://github.com/LilithHafner/AliasTables.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/LilithHafner/AliasTables.jl/actions/workflows/CI.yml?query=branch%3Amain)
 [![Coverage](https://codecov.io/gh/LilithHafner/AliasTables.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/LilithHafner/AliasTables.jl)
-[![PkgEval](https://JuliaCI.github.io/NanosoldierReports/pkgeval_badges/O/AliasTables.svg)](https://JuliaCI.github.io/NanosoldierReports/pkgeval_badges/O/AliasTables.html)
+[![PkgEval](https://JuliaCI.github.io/NanosoldierReports/pkgeval_badges/A/AliasTables.svg)](https://JuliaCI.github.io/NanosoldierReports/pkgeval_badges/A/AliasTables.html)
 [![Aqua](https://raw.githubusercontent.com/JuliaTesting/Aqua.jl/master/badge.svg)](https://github.com/JuliaTesting/Aqua.jl)
 
 AliasTables provides the `AliasTable` type, which is an object that defines a probability
