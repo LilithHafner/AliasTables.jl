@@ -61,7 +61,6 @@ end
 AliasTable(weights::AbstractVector{<:Real}; _normalize=true) = AliasTable{UInt64, Int}(weights; _normalize=_normalize)
 AliasTable{T}(weights::AbstractVector{<:Real}; _normalize=true) where T <: Unsigned = AliasTable{T, Int}(weights; _normalize=_normalize)
 function AliasTable{T, I}(weights; _normalize=true) where {T <: Unsigned, I <: Integer}
-    # function _AliasTable(::Type{T}, ::Type{I}, weights; _normalize=true) where {T <: Unsigned, I <: Integer}
     require_one_based_indexing(weights)
     if _normalize
         (is_constant, sm) = checked_sum(weights)
@@ -70,8 +69,7 @@ function AliasTable{T, I}(weights; _normalize=true) where {T <: Unsigned, I <: I
         elseif sm-true == typemax(T) # pre-normalized
             _alias_table(T, I, weights)
         else
-            # norm = normalize_to_uint_lazy_frac_div(T, weights, sm)
-            norm = normalize_to_uint_frac_div(T, weights, sm)
+            norm = normalize_to_uint(T, weights, sm)
             _alias_table(T, I, norm)
         end
     else
@@ -82,7 +80,7 @@ end
 function _constant_alias_table(::Type{T}, ::Type{I}, index, length) where {I, T}
     bitshift = top_set_bit(index - 1)
     len = 1 << bitshift
-    points_per_cell = one(T) << (8*sizeof(T) - bitshift)#typemax(T)+1 / len
+    points_per_cell = one(T) << (8*sizeof(T) - bitshift) # typemax(T)+1 / len
 
     probability_alias = Memory{Tuple{T, I}}(undef, len)
     for i in 1:len
@@ -128,15 +126,10 @@ function _alias_table(::Type{T}, ::Type{I}, weights0) where {I, T}
     onz = get_only_nonzero(weights0)
     onz == -2 || return _constant_alias_table(T, I, onz, length(weights0))
 
-    # weights = Iterators.take(weights0, findlast(!iszero, weights0))
     weights = hot_take(weights0, findlast(!iszero, weights0))
-    # weights = weights0
-    # while iszero(last(weights))
-        # pop!(weights)
-    # end
     bitshift = top_set_bit(length(weights) - 1)
-    len = 1 << bitshift#next_or_eq_power_of_two(length(weights))
-    points_per_cell = one(T) << (8*sizeof(T) - bitshift)#typemax(T)+1 / len
+    len = 1 << bitshift # next_or_eq_power_of_two(length(weights))
+    points_per_cell = one(T) << (8*sizeof(T) - bitshift) # typemax(T)+1 / len
 
     probability_alias = Memory{Tuple{T, I}}(undef, len)
 
@@ -151,26 +144,26 @@ function _alias_table(::Type{T}, ::Type{I}, weights0) where {I, T}
     while true
         # @show current_i, current_desired, points_per_cell
         if current_desired < points_per_cell # Surplus (strict)
-            while true                                                             # Find the next thirsty cell
+            while true                                                            # Find the next thirsty cell
                 ix = iterate(enum_weights, thirsty_state)
-                ix === nothing && throw(ArgumentError("sum(weights) is too low"))  # If there is no thirsty cell, there are more points than requsted by weights.
+                ix === nothing && throw(ArgumentError("sum(weights) is too low")) # If there is no thirsty cell, there are more points than requsted by weights.
                 (thirsty_i, thirsty_desired), thirsty_state = ix
                 thirsty_desired >= points_per_cell && break
             end
-            excess = points_per_cell - current_desired                             # Assign this many extra points
+            excess = points_per_cell - current_desired                            # Assign this many extra points
             probability_alias[current_i] = (excess, thirsty_i-current_i)          # To the targeted cell
-            current_i = thirsty_i                                                  # Now we have to make sure that thristy cell gets exactly what it wants and no more
-            current_desired = thirsty_desired - excess                             # It wants what it wants and hasn't already been transferred
+            current_i = thirsty_i                                                 # Now we have to make sure that thristy cell gets exactly what it wants and no more
+            current_desired = thirsty_desired - excess                            # It wants what it wants and hasn't already been transferred
         else                                 # Thirsty (loose)
-            while true                                                             # Find the next surplus cell
+            while true                                                            # Find the next surplus cell
                 ix = iterate(enum_weights, surplus_state)
-                ix === nothing && @goto break_outer                                # If there is no surplus cell, handle below
+                ix === nothing && @goto break_outer                               # If there is no surplus cell, handle below
                 (surplus_i, surplus_desired), surplus_state = ix
                 surplus_desired < points_per_cell && break
             end
-            excess = points_per_cell - surplus_desired                             # Assign this many extra points
+            excess = points_per_cell - surplus_desired                            # Assign this many extra points
             probability_alias[surplus_i] = (excess, current_i-surplus_i)          # From the cell with surplus to this cell
-            current_desired -= excess                                              # We now don't want as many points (and may even no longer be thristy)
+            current_desired -= excess                                             # We now don't want as many points (and may even no longer be thristy)
         end
     end
     @label break_outer
@@ -245,8 +238,6 @@ function sample(x::T, at::AliasTable{T, I}) where {T, I}
     # @assert (one(T) << shift) - one(T) == at.mask
     val = x & at.mask
     @inbounds prob, alias = at.probability_alias[cell%Int]
-    # (val < prob ? (alias+cell) : I(cell))::I
-    # I((val < prob) * alias + cell)::I
     (((val < prob) * alias + cell)%I)::I
 end
 
@@ -307,16 +298,15 @@ function Base.show(io::IO, at::AliasTable{T, I}) where {T, I}
     end
     print(io, "(")
     print(IOContext(io, :typeinfo=>Vector{T}), probabilities(at))
-    # print(IOContext(io, :typeinfo=>Memory{Tuple{T, I}}), at.probability_alias)
     print(io, ")")
 end
 isdefined(Base, :typeinfo_implicit) && (Base.typeinfo_implicit(::Type{<:AliasTable}) = true)
 
 ### Equality and hashing
 
-# These naive implementations are equivalent to computing equality based on
-# `WithZeros(probabilities, Inf)` because the constrors are deterministic w.r.t
-# the input weights exclusind trailing zeros.
+# These naive implementations are equivalent to computing equality
+# based on probabilities because the constrors are deterministic w.r.t
+# the input weights exclusind trailing zeros and the length is tracked.
 Base.:(==)(at1::AliasTable{T}, at2::AliasTable{T}) where T = at1.length == at2.length && at1.probability_alias == at2.probability_alias
 function Base.:(==)(at1::AliasTable{T1}, at2::AliasTable{T2}) where {T1, T2}
     at1.length == at2.length || return false
@@ -419,7 +409,7 @@ end
 # end
 
 widen_float(T, x) = typemax(T) < floatmax(x) ? x : widen_float(T, widen(x))
-function normalize_to_uint_frac_div(::Type{T}, v, sm) where {T <: Unsigned}
+function normalize_to_uint(::Type{T}, v, sm) where {T <: Unsigned}
     if sm isa AbstractFloat
         shift = 8sizeof(T)-exponent(sm + sqrt(eps(sm)))-1
         v2 = res = [floor(T, ldexp(widen_float(T, x), shift)) for x in v]
