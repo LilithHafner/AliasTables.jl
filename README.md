@@ -24,7 +24,7 @@ the random API, this latter approach is taken.
 julia> using AliasTables
 
 julia> at = AliasTable([5,10,1])
-AliasTable([(0x2000000000000000, 1), (0x0000000000000000, 0), (0x3000000000000000, -2), (0x4000000000000000, -2)])
+AliasTable([0x5000000000000000, 0xa000000000000000, 0x1000000000000000])
 
 julia> rand(at, 10)
 10-element Vector{Int64}:
@@ -53,18 +53,14 @@ julia> @b rand(1000) AliasTable
 julia> @b AliasTable(rand(1000)) rand(_, 1000)
 1.420 μs (3 allocs: 7.875 KiB)
 
+julia> using StatsBase
+
 julia> at = AliasTable{UInt16}([5,10,1])
-AliasTable{UInt16}([(0x2000, 1), (0x0000, 0), (0x3000, -2), (0x4000, -2)])
+AliasTable{UInt16}([0x5000, 0xa000, 0x1000])
 
 julia> countmap(AliasTables.sample(x, at) for x in typemin(UInt16):typemax(UInt16))
 Dict{Any, Int64} with 3 entries:
   2 => 40960
   3 => 4096
   1 => 20480
-
-julia> values(ans) .* 16/2^16
-3-element Vector{Float64}:
- 10.0
-  1.0
-  5.0
 ```
