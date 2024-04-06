@@ -417,10 +417,11 @@ end
 #     (frac_div(T(x), sm) + (i <= bonus) for (i,x) in enumerate(weights))
 # end
 
+widen_float(T, x) = typemax(T) < floatmax(x) ? x : widen_float(T, widen(x))
 function normalize_to_uint_frac_div(::Type{T}, v, sm) where {T <: Unsigned}
     if sm isa AbstractFloat
         shift = 8sizeof(T)-exponent(sm + sqrt(eps(sm)))-1
-        v2 = res = [floor(T, ldexp(x, shift)) for x in v]
+        v2 = res = [floor(T, ldexp(widen_float(T, x), shift)) for x in v]
         onz = get_only_nonzero(v2)
         onz != -2 && return res
         sm2 = sum(res)
