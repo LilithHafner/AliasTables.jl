@@ -13,6 +13,12 @@ ttf_sample = @elapsed rand(at)
 ttf_sample_multi = @elapsed rand(at, 30)
 @track ttf_sample_multi
 
+f() = @b AliasTable(rand(1000)) rand(_, 1000) evals=10 samples=1000
+x = f()
+@track x
+x = f()
+@track x
+
 for n in [1, 10, 100, 1000]
     @track @b rand(n) AliasTable seconds=.02
     @track @b AliasTable(rand(n)) rand seconds=.02

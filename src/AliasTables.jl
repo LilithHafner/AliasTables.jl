@@ -238,7 +238,7 @@ function sample(x::T, at::AliasTable{T, I}) where {T, I}
     # @assert (one(T) << shift) - one(T) == at.mask
     val = x & at.mask
     @inbounds prob, alias = at.probability_alias[cell%Int]
-    (((val < prob) * alias + cell)%I)::I
+    (((val < prob) * (alias-cell) + cell)%I)::I
 end
 
 ### Random API
