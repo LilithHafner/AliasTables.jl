@@ -27,6 +27,7 @@ using Random, OffsetArrays
               AliasTable{UInt8}([typemax(UInt32), typemax(UInt32)]) ==
               AliasTable(Float16[1, 1])
         @test rand(AliasTable{UInt8}(fill(0x80, 2^18))) in 1:2^18
+        @test length(AliasTable([1, 2, 3])) == 3
     end
 
     @testset "Invalid weight error messages" begin

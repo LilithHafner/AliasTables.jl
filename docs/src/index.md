@@ -43,6 +43,15 @@ julia> rand(at, 8)
  1
  3
  2
+
+julia> length(at)
+3
+
+julia> AliasTables.probabilities(float, at)
+3-element Vector{Float64}:
+ 0.3125
+ 0.625
+ 0.0625
 ```
 
 ## Implementation details
@@ -146,4 +155,5 @@ domain according to the specifications layed out by the Random stdlib.
 AliasTable
 AliasTables.sample
 AliasTables.probabilities
+length(::AliasTable)
 ```

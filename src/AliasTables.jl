@@ -295,6 +295,13 @@ rounding error.
 probabilities(::typeof(float), at::AliasTable{T}) where T =
     probabilities(at) ./ (float(typemax(T))+1)
 
+### Length accessor
+"""
+    length(at::AliasTable)
+
+Get the number of weights that `at` was constructed with, including trailing zeros.
+"""
+Base.length(at::AliasTable) = at.length
 
 ### Show
 function Base.show(io::IO, at::AliasTable{T, I}) where {T, I}
