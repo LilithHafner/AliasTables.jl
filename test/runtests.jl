@@ -1,6 +1,6 @@
 using AliasTables
 using Test, Aqua, RegressionTests
-using Random, OffsetArrays
+using Random, OffsetArrays, StableRNGs
 
 @testset "AliasTables.jl" begin
     @testset "Code quality (Aqua.jl)" begin
@@ -173,6 +173,17 @@ using Random, OffsetArrays
             repr_test([AliasTable{UInt16}([1, 2, 5]), AliasTable{UInt16}([0.0,1.0])]::Vector{AliasTable{UInt16, Int}}, "[AliasTable{UInt16}([0x2000, 0x4000, 0xa000]), AliasTable{UInt16}([0x0000, 0xffff])]")
             repr_test([AliasTable{UInt16}([1, 2, 5]), AliasTable([0.0,1.0])]::Vector{<:AliasTable}, "[AliasTable{UInt16}([0x2000, 0x4000, 0xa000]), AliasTable([0x0000000000000000, 0xffffffffffffffff])]")
         end
+    end
+
+    @testset "Consistency across Julia version and os" begin
+        # This package does not guarantee reproducibility across minor versions of itself
+        # so feel free to update the results here if the random stream changes.
+        # However, we currentlty do prodcuce the same random stream on all Julia versions
+        # and OSs. This test, running in CI, confirms that.
+
+        at = AliasTable([0.4487, 0.46, 0.402, 0.062, 0.669, 0.1103, 0.9893, 0.1807, 0.7676])
+        rng = StableRNGs.StableRNG(1729)
+        @test rand(rng, at, 19) == [9, 3, 2, 2, 9, 7, 7, 9, 7, 5, 8, 5, 9, 7, 3, 2, 9, 9, 5]
     end
 
     @testset "Misc" begin
