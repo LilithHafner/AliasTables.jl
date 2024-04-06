@@ -20,7 +20,7 @@ else
 end
 
 """
-    AliasTable{T<:Unsigned=UInt, I<:Integer=Int}(weights::AbstractVector{<:Real}; normalize=true)
+    AliasTable{T<:Unsigned=UInt, I<:Integer=Int}(weights::AbstractVector{<:Real})
 
 An efficient data structure for sampling from a discrete distribution.
 
@@ -31,12 +31,6 @@ at that index.
 The mapping can be accessed directly via
 [`AliasTables.sample(x::T, at::AliasTable{T, I})`](@ref AliasTables.sample)
 or indirectly via the `Random` API: `rand(at)`, `rand(rng, at)`, `rand(at, dims...)`, etc.
-
-Set `normalize = false` for incrased performance when the weights are already normalized to
-sum to exactly the number of values representable by `T` (i.e. `typemax(T)+1`). A different
-sum will result in an error unless exactly one weight is non-zero, in which case the sum is
-not checked and the `AliasTable` represents a constant distribution which always produces
-the index of the nonzero weight.
 """
 struct AliasTable{T <: Unsigned, I <: Integer}
     mask::T
@@ -64,12 +58,12 @@ struct AliasTable{T <: Unsigned, I <: Integer}
     global _AliasTable
 end
 
-AliasTable(weights::AbstractVector{<:Real}; normalize=true) = AliasTable{UInt64, Int}(weights; normalize=normalize)
-AliasTable{T}(weights::AbstractVector{<:Real}; normalize=true) where T <: Unsigned = AliasTable{T, Int}(weights; normalize=normalize)
-function AliasTable{T, I}(weights; normalize=true) where {T <: Unsigned, I <: Integer}
-    # function _AliasTable(::Type{T}, ::Type{I}, weights; normalize=true) where {T <: Unsigned, I <: Integer}
+AliasTable(weights::AbstractVector{<:Real}; _normalize=true) = AliasTable{UInt64, Int}(weights; _normalize=_normalize)
+AliasTable{T}(weights::AbstractVector{<:Real}; _normalize=true) where T <: Unsigned = AliasTable{T, Int}(weights; _normalize=_normalize)
+function AliasTable{T, I}(weights; _normalize=true) where {T <: Unsigned, I <: Integer}
+    # function _AliasTable(::Type{T}, ::Type{I}, weights; _normalize=true) where {T <: Unsigned, I <: Integer}
     require_one_based_indexing(weights)
-    if normalize
+    if _normalize
         (is_constant, sm) = checked_sum(weights)
         if is_constant
             _constant_alias_table(T, I, sm, length(weights))

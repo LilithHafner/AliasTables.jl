@@ -33,18 +33,18 @@ using Random, OffsetArrays, StableRNGs
     @testset "Invalid weight error messages" begin
         @test_throws ArgumentError("found negative weight -1") AliasTable([1, -1])
         @test_throws ArgumentError("found negative weight -1") AliasTable([1, 1, -1])
-        @test_throws ArgumentError("found negative weight -1") AliasTable([3, typemax(Int), -1, typemax(Int)], normalize=false)
+        @test_throws ArgumentError("found negative weight -1") AliasTable([3, typemax(Int), -1, typemax(Int)], _normalize=false)
         @test_throws ArgumentError("all weights are zero") AliasTable([0, 0])
         @test_throws ArgumentError("all weights are zero") AliasTable([0])
         @test_throws ArgumentError("all weights are zero") AliasTable(UInt[0, 0])
         @test_throws ArgumentError("all weights are zero") AliasTable(UInt[0])
         @test_throws ArgumentError("weights must be non-empty") AliasTable(Int[])
         @test_throws ArgumentError("weights must be non-empty") AliasTable(UInt[])
-        @test_throws ArgumentError("sum(weights) is too low") AliasTable(UInt[123, 456], normalize=false)
-        @test_throws ArgumentError("sum(weights) is too high") AliasTable(UInt[unsigned(3)<<62, unsigned(2)<<62, unsigned(3)<<62], normalize=false)
+        @test_throws ArgumentError("sum(weights) is too low") AliasTable(UInt[123, 456], _normalize=false)
+        @test_throws ArgumentError("sum(weights) is too high") AliasTable(UInt[unsigned(3)<<62, unsigned(2)<<62, unsigned(3)<<62], _normalize=false)
         @test_throws ArgumentError("sum(weights) overflows") AliasTable(UInt[unsigned(3)<<62, unsigned(2)<<62, unsigned(3)<<62])
         @test AliasTables.probabilities(float, AliasTable(UInt[unsigned(3)<<61, unsigned(2)<<61, unsigned(3)<<61])) == [3,2,3] ./ 8
-        @test AliasTables.probabilities(float, AliasTable(UInt[unsigned(3)<<61, unsigned(2)<<61, unsigned(3)<<61], normalize=false)) == [3,2,3] ./ 8
+        @test AliasTables.probabilities(float, AliasTable(UInt[unsigned(3)<<61, unsigned(2)<<61, unsigned(3)<<61], _normalize=false)) == [3,2,3] ./ 8
         @test_throws ArgumentError("offset arrays are not supported but got an array with index other than 1") AliasTable(OffsetVector([1,2], 1))
         @test AliasTable(OffsetVector([1,2], 0)) == AliasTable([1,2])
     end
