@@ -155,5 +155,5 @@ domain according to the specifications layed out by the Random stdlib.
 AliasTable
 AliasTables.sample
 AliasTables.probabilities
-length
+length(::AliasTable)
 ```
