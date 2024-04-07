@@ -14,7 +14,7 @@ Construct an AliasTable by calling [`AliasTable(probabilities)`](@ref) for some 
 of probabilities. For example, to create a table with a 30% chance of returning 1, and a
 70% chance of returning 2, you would call `AliasTable([0.3, 0.7])`.
 
-`probabilities` must be an abstract vector of real number. The sum need not be 1 as the
+`probabilities` must be an abstract vector of real numbers. The sum need not be 1 as the
 input will be automatically normalized.
 
 ## Sampling from an AliasTable
@@ -37,11 +37,11 @@ julia> rand(at, 8)
 8-element Vector{Int64}:
  2
  2
- 2
- 2
  1
- 1
+ 2
  3
+ 1
+ 2
  2
 
 julia> length(at)
