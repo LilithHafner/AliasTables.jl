@@ -318,6 +318,7 @@ julia> AliasTables.probabilities(float, AliasTable([1, 3, 1]))
  0.2
  0.6
  0.2
+```
 """
 probabilities(::typeof(float), at::AliasTable{T}) where T =
     probabilities(at) ./ (float(typemax(T))+1)
