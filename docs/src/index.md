@@ -14,8 +14,8 @@ Construct an AliasTable by calling [`AliasTable(probabilities)`](@ref) for some 
 of probabilities. For example, to create a table with a 30% chance of returning 1, and a
 70% chance of returning 2, you would call `AliasTable([0.3, 0.7])`.
 
-`probabilities` may be a vector, or any other iterator. Its elements may be Float64, or any
-other real number. The sum need not be 1 as the input will be automatically normalized.
+`probabilities` must be an abstract vector of real number. The sum need not be 1 as the
+input will be automatically normalized.
 
 ## Sampling from an AliasTable
 
