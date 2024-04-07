@@ -272,12 +272,7 @@ See also [`AliasTable`](@ref), [`AliasTables.sample`](@ref)
 
 # Examples
 
-```jldoctestjldoctest
-julia> at = AliasTable([1, 3, 1])
-AliasTable([0x3333333333333334, 0x9999999999999999, 0x3333333333333333])
-
-julia> rand(at, 5)
-
+```jldoctest
 julia> at = AliasTable([1, 3, 1])
 AliasTable([0x3333333333333334, 0x9999999999999999, 0x3333333333333333])
 
@@ -289,9 +284,9 @@ julia> AliasTables.probabilities(at)
 
 julia> AliasTables.probabilities(AliasTable([0, 1, 0]))
 3-element Vector{UInt64}:
- 0
+ 0x0000000000000000
  0xffffffffffffffff
- 0
+ 0x0000000000000000
 ```
 """
 function probabilities(at::AliasTable{T}) where T
