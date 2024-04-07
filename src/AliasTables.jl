@@ -31,6 +31,21 @@ at that index.
 The mapping can be accessed directly via
 [`AliasTables.sample(x::T, at::AliasTable{T, I})`](@ref AliasTables.sample)
 or indirectly via the `Random` API: `rand(at)`, `rand(rng, at)`, `rand(at, dims...)`, etc.
+
+# Example
+
+```jldoctest; filter=[r" [1-3]"]
+julia> at = AliasTable([1, 3, 1])
+AliasTable([0x3333333333333334, 0x9999999999999999, 0x3333333333333333])
+
+julia> rand(at, 5)
+5-element Vector{Int64}:
+ 2
+ 3
+ 2
+ 2
+ 3
+```
 """
 struct AliasTable{T <: Unsigned, I <: Integer}
     mask::T
@@ -254,6 +269,25 @@ sum to one more than `typemax(T)`, unless `at` is a constant distribution (e.g.
 `AliasTable([0,1,0])`), in which case the weights will sum to `typemax(T)`.
 
 See also [`AliasTable`](@ref), [`AliasTables.sample`](@ref)
+
+# Examples
+
+```jldoctest
+julia> at = AliasTable([1, 3, 1])
+AliasTable([0x3333333333333334, 0x9999999999999999, 0x3333333333333333])
+
+julia> AliasTables.probabilities(at)
+3-element Vector{UInt64}:
+ 0x3333333333333334
+ 0x9999999999999999
+ 0x3333333333333333
+
+julia> AliasTables.probabilities(AliasTable([0, 1, 0]))
+3-element Vector{UInt64}:
+ 0x0000000000000000
+ 0xffffffffffffffff
+ 0x0000000000000000
+```
 """
 function probabilities(at::AliasTable{T}) where T
     bitshift = top_set_bit(length(at.probability_alias) - 1)
@@ -273,9 +307,17 @@ end
 """
     probabilities(float, at::AliasTable{T}) -> Vector{<:AbstractFloat}
 
-
 Return the sampling probabilities of `at`. The returned vector will sum to 1.0, up to
 rounding error.
+
+# Example
+
+```jldoctest
+julia> AliasTables.probabilities(float, AliasTable([1, 3, 1]))
+3-element Vector{Float64}:
+ 0.2
+ 0.6
+ 0.2
 """
 probabilities(::typeof(float), at::AliasTable{T}) where T =
     probabilities(at) ./ (float(typemax(T))+1)
@@ -285,6 +327,13 @@ probabilities(::typeof(float), at::AliasTable{T}) where T =
     length(at::AliasTable)
 
 Get the number of weights that `at` was constructed with, including trailing zeros.
+
+# Example
+
+```jldoctest
+julia> length(AliasTable([1, 3, 0]))
+3
+```
 """
 Base.length(at::AliasTable) = at.length
 
