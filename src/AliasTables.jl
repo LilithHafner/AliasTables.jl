@@ -20,7 +20,7 @@ else
 end
 
 """
-    AliasTable{T<:Unsigned=UInt, I<:Integer=Int}(weights::AbstractVector{<:Real})
+    AliasTable{T<:Unsigned=UInt64, I<:Integer=Int}(weights::AbstractVector{<:Real})
 
 An efficient data structure for sampling from a discrete distribution.
 
@@ -541,7 +541,7 @@ precompile(Tuple{Type{NamedTuple{(:_normalize,), T} where T<:Tuple}, Tuple{Bool}
 precompile(Tuple{Type{AliasTable{T, I} where I<:Integer where T<:Unsigned}, Vector{Float64}})
 
 precompile(Tuple{typeof(top_set_bit), UInt64})
-precompile(Tuple{typeof(rand), AliasTable{UInt64, Int64}})
-VERSION >= v"1.6" && precompile(Tuple{typeof(rand), typeof(Random.default_rng()), AliasTable{UInt64, Int64}})
+precompile(Tuple{typeof(rand), AliasTable{UInt64, Int}})
+VERSION >= v"1.6" && precompile(Tuple{typeof(rand), typeof(Random.default_rng()), AliasTable{UInt64, Int}})
 
 end
