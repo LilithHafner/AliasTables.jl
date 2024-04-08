@@ -102,10 +102,10 @@ some integer `p`.
 
 ## Alternate sampling API
 
-You can bypass the Random API and sample directly from an `AliasTable` using the public
-[`AliasTables.sample`](@ref) function which is branchless, deterministic, and not
-pseudorandom. If given an input drawn uniformly at random from the domain of `T`, this
-method will produce a sample drawn from the distribution represented by `at`.
+You can bypass the Random API and sample directly from an alias table `at::AliasTable{T}`
+using the public [`AliasTables.sample`](@ref) function which is branchless, deterministic,
+and not pseudorandom. If given an input drawn uniformly at random from the domain of `T`,
+this method will produce a sample drawn from the distribution represented by `at`.
 
 ```@docs; canonical=false
 AliasTables.sample
