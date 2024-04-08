@@ -542,6 +542,6 @@ precompile(Tuple{Type{AliasTable{T, I} where I<:Integer where T<:Unsigned}, Vect
 
 precompile(Tuple{typeof(top_set_bit), UInt64})
 precompile(Tuple{typeof(rand), AliasTable{UInt64, Int64}})
-precompile(Tuple{typeof(rand), TaskLocalRNG, AliasTable{UInt64, Int64}})
+VERSION >= v"1.6" && precompile(Tuple{typeof(rand), typeof(Random.default_rng()), AliasTable{UInt64, Int64}})
 
 end
