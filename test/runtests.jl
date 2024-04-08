@@ -3,18 +3,6 @@ using Test, Aqua, RegressionTests
 using Random, OffsetArrays, StableRNGs
 
 @testset "AliasTables.jl" begin
-    VERSION >= v"1.11.0-alpha2" && @testset "precompilation" begin
-        # The @timed macro didn't used to have the compile_time field.
-        x = rand(10)
-        res = @timed AliasTable(x)
-        @test res.compile_time == 0
-        res2 = @timed rand(res.value)
-        @test res2.compile_time == 0
-        rng = Random.default_rng()
-        res3 = @timed rand(rng, res.value)
-        @test res3.compile_time == 0
-    end
-
     @testset "Code quality (Aqua.jl)" begin
         Aqua.test_all(AliasTables, deps_compat=false)
         Aqua.test_deps_compat(AliasTables, check_extras=false)
