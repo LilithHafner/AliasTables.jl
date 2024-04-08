@@ -536,4 +536,12 @@ function normalize_to_uint(::Type{T}, v, sm) where {T <: Unsigned}
     res
 end
 
+precompile(Tuple{typeof(Base.:(<)), UInt64, Float64})
+precompile(Tuple{Type{NamedTuple{(:_normalize,), T} where T<:Tuple}, Tuple{Bool}})
+precompile(Tuple{Type{AliasTables.AliasTable{T, I} where I<:Integer where T<:Unsigned}, Array{Float64, 1}})
+
+precompile(Tuple{typeof(Base.top_set_bit), UInt64})
+precompile(Tuple{typeof(Base.rand), AliasTables.AliasTable{UInt64, Int64}})
+precompile(Tuple{typeof(Base.rand), Random.TaskLocalRNG, AliasTables.AliasTable{UInt64, Int64}})
+
 end
