@@ -248,13 +248,57 @@ as well.
 See also [`AliasTable`](@ref), [`AliasTables.probabilities`](@ref)
 """
 function sample(x::T, at::AliasTable{T, I}) where {T, I}
-    shift = 8sizeof(T) - top_set_bit(length(at.probability_alias)) + 1
+    shift = top_set_bit(typemax(T)) - top_set_bit(length(at.probability_alias)) + 1
     cell = (x >> shift) + 1
     # @assert (one(T) << shift) - one(T) == at.mask
     val = x & at.mask
-    @inbounds prob, alias = at.probability_alias[cell%Int]
+    @inbounds prob, alias = at.probability_alias[cell%Int] # see proof below
     (((val < prob) * alias + cell)%I)::I
 end
+
+#=
+Loose justification that @inbounds is safe:
+
+The worry is that `x` could be too large, so let's assume `x == typemax(T)`. When we perform
+the bitshift `x >> shift`, we can decompose that into shifting by each of summands of shift,
+one after another, but only dropping out of bounds bits at the end. Lookinf first at
+`x >> top_set_bit(typemax(T))`, this is, in the worst case, just below 1. Now, let's assume
+that `length(at.probability_alias)` is a power of 2. In this case,
+`length(at.probability_alias) == 1 << (top_set_bit(length(at.probability_alias))-1)`
+and we know that `cell = ([something less than 1] >> (-top_set_bit(length(at.probability_alias))+1)) + 1`,
+so `cell < length(at.probability_alias) + 1`, and therefore `cell` is in bounds. Moding by
+`Int` isn't going make `cell` any bigger. In the event that `length(at.probability_alias)`
+is not a power of 2, the bounds we established above still hold based on the top set bit of
+that length, but some lower bits are also 1s which gives us some extra room to spare.
+
+Mathematical proof that the @inbounds is safe:
+
+Bitshifts with unsigned left hand sides have the property that `x >> n` is always less than
+or equal to the mathematical value ``x2^{-n}``, with equality if none of the bits are
+shifted off the edge of the word. This holds regardless of the sign on `n`.
+
+Consequently, ``cell-1 = x >> shift ≤ x2^{-shift} ≤ typemax(T)2^{-shift}``.
+
+Let us abbreviate `top_set_bit` as `tsb`, and note that we always
+have ``2^{tsb(x)-1} ≤ x < 2^{tsb(x)}``. This lets us write
+
+``typemax(T)2^{-shift} < 2^{tsb(typemax(T))}2^{-shift} = 2^{tsb(typemax(T))-shift}``
+
+Expanding `shift` we find
+
+``tsb(typemax(T))-shift = tsb(typemax(T))-(tsb(typemax(T)) - tsb(length(at.probability_alias)) + 1)
+                        = tsb(length(at.probability_alias))-1``
+
+So we have ``2^{tsb(typemax(T))-shift} = 2^{tsb(length(at.probability_alias))-1}``.
+
+From the innequality above, `2^{tsb(length(at.probability_alias))-1} ≤ length(at.probability_alias))`
+
+Stringing all these together we have ``cell-1 < length(at.probability_alias)``, and
+``cell-1`` is clearly non-negative, so we have ``1 ≤ cell ≤ length(at.probability_alias)``.
+
+Assuming that `length(at.probability_alias)` is an `Int`, `cell%Int == cell`, and indexing
+into `at.probability_alias[cell%Int]` is in bounds.
+=#
 
 ### Random API
 Random.rand(rng::Random.AbstractRNG, at::Random.SamplerTrivial{<:AliasTable{T}}) where T = sample(rand(rng, T), at.self)
