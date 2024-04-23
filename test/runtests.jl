@@ -27,6 +27,8 @@ using Random, OffsetArrays, StableRNGs
               AliasTable{UInt8}([typemax(UInt32), typemax(UInt32)]) ==
               AliasTable(Float16[1, 1])
         @test rand(AliasTable{UInt8}(fill(0x80, 2^18))) in 1:2^18
+        @test AliasTable{UInt8}(vcat(fill(0x00, 2^8), 0x80, 0x80)) == # Issue #34
+                     AliasTable(vcat(fill(0x00, 2^8), 0x80, 0x80))
         @test length(AliasTable([1, 2, 3])) == 3
     end
 
@@ -47,6 +49,8 @@ using Random, OffsetArrays, StableRNGs
         @test AliasTables.probabilities(float, AliasTable(UInt[unsigned(3)<<61, unsigned(2)<<61, unsigned(3)<<61], _normalize=false)) == [3,2,3] ./ 8
         @test_throws ArgumentError("offset arrays are not supported but got an array with index other than 1") AliasTable(OffsetVector([1,2], 1))
         @test AliasTable(OffsetVector([1,2], 0)) == AliasTable([1,2])
+        @test_throws ArgumentError("sum(weights) is too high") AliasTable{UInt8}(vcat(fill(0x00, 2^8), 0x80, 0x81), _normalize=false) # _lookup_alias_table
+        @test_throws ArgumentError("sum(weights) is too low") AliasTable{UInt8}(vcat(fill(0x00, 2^8), 0x80, 0x7f), _normalize=false) # _lookup_alias_table
     end
 
     @testset "probabilities()" begin
@@ -132,6 +136,9 @@ using Random, OffsetArrays, StableRNGs
             ],[
                 AliasTable{UInt16}([1, 2, 3, 5]),
                 AliasTable{UInt16, Int8}([1, 2, 3, 5]),
+            ],[
+                AliasTable{UInt8}(vcat(fill(0x00, 2^8), 0x80, 0x80)), # Issue #34
+                AliasTable(vcat(fill(0x00, 2^8), 0x80, 0x80))
             ]
         ]
 
