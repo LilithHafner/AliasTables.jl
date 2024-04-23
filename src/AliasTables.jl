@@ -93,14 +93,10 @@ function AliasTable{T, I}(weights; _normalize=true) where {T <: Unsigned, I <: I
 end
 
 function _constant_alias_table(::Type{T}, ::Type{I}, index, length) where {I, T}
-    bitshift = top_set_bit(index - 1)
-    len = 1 << bitshift
-    points_per_cell = one(T) << (8*sizeof(T) - bitshift) # typemax(T)+1 / len
-
-    probability_alias = Memory{Tuple{T, I}}(undef, len)
-    for i in 1:len
-        probability_alias[i] = (points_per_cell, index-i)
-    end
+    points_per_cell = one(T) << (8*sizeof(T) - 1) # typemax(T)+1 / 2
+    probability_alias = Memory{Tuple{T, I}}(undef, 2)
+    probability_alias[1] = (points_per_cell, index-1)
+    probability_alias[2] = (points_per_cell, index-2)
     _AliasTable(probability_alias, length)
 end
 
