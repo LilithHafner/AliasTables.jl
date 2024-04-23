@@ -104,6 +104,36 @@ function _constant_alias_table(::Type{T}, ::Type{I}, index, length) where {I, T}
     _AliasTable(probability_alias, length)
 end
 
+function _lookup_alias_table(::Type{T}, ::Type{I}, weights, mtz) where {I, T}
+    len = 1 << (8sizeof(T) - mtz)
+    len == 0 && throw(ArgumentError("Lookup table longer than typemax(Int)"))
+    probability_alias = Memory{Tuple{T, I}}(undef, len)
+    j = 1
+    for (i, w) in enumerate(weights)
+        j2 = j + Int(w >> mtz)
+        j2-1 > len && throw(ArgumentError("sum(weights) is too high"))
+        for k in j:j2-1
+            probability_alias[k] = (one(T) << mtz, i-k)
+        end
+        j = j2
+    end
+    j <= len && throw(ArgumentError("sum(weights) is too low"))
+    _AliasTable(probability_alias, length(weights))
+end
+
+function minimum_trailing_zeros(x) # minimum(trailing_zeros, x), but faster.
+    v, i = iterate(x)
+    orv = v
+    vi = v, i
+    while iseven(orv)
+        vi = iterate(x, i)
+        vi === nothing && break
+        v, i = vi
+        orv |= v
+    end
+    trailing_zeros(orv)
+end
+
 function throw_on_negatives(weights)
     for w in weights
         w < 0 && throw(ArgumentError("found negative weight $w"))
@@ -145,6 +175,14 @@ function _alias_table(::Type{T}, ::Type{I}, weights0) where {I, T}
     bitshift = top_set_bit(length(weights) - 1)
     len = 1 << bitshift # next_or_eq_power_of_two(length(weights))
     points_per_cell = one(T) << (8*sizeof(T) - bitshift) # typemax(T)+1 / len
+
+    # The reason this optimiation exists is to prevent when points_per_cell == 0.
+    # The reason it is applied so aggressively is so aggressively is so that
+    # AliasTables of different bitwidths are structurally similar for the same
+    # weights. This is important for equality and hashing.
+    mtz = minimum_trailing_zeros(weights)
+    lookup_table_bits = 8sizeof(T) - mtz
+    lookup_table_bits < bitshift && return _lookup_alias_table(T, I, weights, mtz)
 
     probability_alias = Memory{Tuple{T, I}}(undef, len)
 
