@@ -30,6 +30,7 @@ using Random, OffsetArrays, StableRNGs
         @test AliasTable{UInt8}(vcat(fill(0x00, 2^8), 0x80, 0x80)) == # Issue #34
                      AliasTable(vcat(fill(0x00, 2^8), 0x80, 0x80))
         @test length(AliasTable([1, 2, 3])) == 3
+        @test rand(AliasTable{UInt8}(vcat(fill(0, 500), 1))) == 501 # PR #36
     end
 
     @testset "Invalid weight error messages" begin
