@@ -497,12 +497,12 @@ function Base.:(==)(at1::AliasTable{T1}, at2::AliasTable{T2}) where {T1, T2}
     at1.length == at2.length || return false
     length(at1.probability_alias) == length(at2.probability_alias) || return false
     bitshift = 8(sizeof(T1) - sizeof(T2))
-    for (po1, po2) in zip(at1.probability_alias, at2.probability_alias)
-        po1[2] == po2[2] &&
+    for (pa1, pa2) in zip(at1.probability_alias, at2.probability_alias)
+        pa1[2] == pa2[2] &&
         if bitshift > 0
-            po1[1] == T1(po2[1]) << bitshift
+            pa1[1] == T1(pa2[1]) << bitshift
         else
-            T2(po1[1]) << -bitshift == po2[1]
+            T2(pa1[1]) << -bitshift == pa2[1]
         end || return false
     end
     true
@@ -517,9 +517,9 @@ function Base.hash(at::AliasTable, h::UInt)
     h ⊻= Sys.WORD_SIZE == 32 ? 0x7719cd5e : 0x0a0c5cfeeb10f090
     h = hash(at.length, h)
     # isempty(at.probability_alias) && return hash(0, h) # This should never happen, but it makes first not throw.
-    po1 = first(at.probability_alias)
+    pa1 = first(at.probability_alias)
     norm(x) = (ldexp(float(x[1]), -8sizeof(x[1])), x[2])
-    hash(MapVector{typeof(norm(po1)), typeof(norm), typeof(at.probability_alias)}(at.probability_alias, norm), h)
+    hash(MapVector{typeof(norm(pa1)), typeof(norm), typeof(at.probability_alias)}(at.probability_alias, norm), h)
 end
 
 ## Normalization
