@@ -2,6 +2,58 @@ module AliasTables
 
 using Random
 
+# TODO switch to depending on https://github.com/LilithHafner/MallocArrays.jl instead
+# of copying the souce code
+module MallocArrays
+
+export malloc, free, MallocArray
+
+struct MallocArray{T, N} <: AbstractArray{T, N}
+    ptr::Ptr{T}
+    size::NTuple{N, Int}
+end
+
+"""
+    malloc(T::Type, dims::Int...) -> MallocArray{T, N} <: AbstractArray{T, N}
+
+Allocate a new array of type `T` and dimensions `dims` using the C stdlib's `malloc`.
+
+`T` must be an `isbitstype`.
+
+This array is not tracked by Julia's garbage collector, so it is the user's responsibility
+to call [`free`](@ref) on it when it is no longer needed.
+"""
+function malloc(::Type{T}, dims::Int...) where T
+    isbitstype(T) || throw(ArgumentError("malloc only supports isbits types"))
+    MallocArray(Ptr{T}(Libc.malloc(sizeof(T) * prod(dims))), dims)
+end
+
+"""
+    free(m::MallocArray)
+
+Free the memory allocated by a MallocArray.
+
+See also [`malloc`](@ref).
+"""
+function free(m::MallocArray)
+    Libc.free(m.ptr)
+end
+
+Base.size(m::MallocArray) = m.size
+Base.IndexStyle(::Type{<:MallocArray}) = IndexLinear()
+Base.@propagate_inbounds function Base.getindex(m::MallocArray, i::Int)
+    @boundscheck checkbounds(m, i)
+    unsafe_load(m.ptr, i)
+end
+Base.@propagate_inbounds function Base.setindex!(m::MallocArray, v, i::Int)
+    @boundscheck checkbounds(m, i)
+    unsafe_store!(m.ptr, v, i)
+    m
+end
+
+end
+using .MallocArrays
+
 export AliasTable
 VERSION >= v"1.11.0-DEV.469" && eval(Meta.parse("public sample, probabilities"))
 
@@ -84,8 +136,13 @@ function AliasTable{T, I}(weights; _normalize=true) where {T <: Unsigned, I <: I
         elseif sm-true == typemax(T) # pre-normalized
             _alias_table(T, I, weights)
         else
-            norm = normalize_to_uint(T, weights, sm)
-            _alias_table(T, I, norm)
+            norm = malloc(T, length(weights))
+            try
+                normalize_to_uint!(norm, weights, sm)
+                _alias_table(T, I, norm)
+            finally
+                free(norm)
+            end
         end
     else
         _alias_table(T, I, weights)
@@ -537,16 +594,18 @@ end
 # end
 
 widen_float(T, x) = typemax(T) < floatmax(x) ? x : widen_float(T, widen(x))
-function normalize_to_uint(::Type{T}, v, sm) where {T <: Unsigned}
+function normalize_to_uint!(res::AbstractVector{T}, v, sm) where {T <: Unsigned}
     if sm isa AbstractFloat
         shift = 8sizeof(T)-exponent(sm + sqrt(eps(sm)))-1
-        v2 = res = [floor(T, ldexp(widen_float(T, x), shift)) for x in v]
+        for i in eachindex(res, v)
+            res[i] = floor(T, ldexp(widen_float(T, v[i]), shift))
+        end
+        v2 = res
         onz = get_only_nonzero(v2)
         onz != -2 && return res
         sm2 = sum(res)
     else
         v2 = v
-        res = Vector{T}(undef, length(v))
         sm2 = sm
     end
 
