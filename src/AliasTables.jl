@@ -454,16 +454,7 @@ function probabilities(at::AliasTable{T}) where T
         # For intertype hasing and equality purposes we sometimes store prob = 0.5
         # even when that is above points_per_cell. Bound here:
         prob2 = min(prob, points_per_cell)
-
-        # try
-            probs[i + alias] += prob2
-        # catch
-        #     @show at
-        #     @show at.probability_alias
-        #     @show i
-        #     # throw(KeyboardInterrupt())
-        #     retrhow()
-        # end
+        probs[i + alias] += prob2
         keep = points_per_cell - prob2
         iszero(keep) || (probs[i] += keep)
         # When len > typemax(T)+1, the excess elements exist only for intertype
