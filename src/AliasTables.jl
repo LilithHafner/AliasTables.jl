@@ -333,7 +333,7 @@ as well.
 See also [`AliasTable`](@ref), [`AliasTables.probabilities`](@ref)
 """
 function sample(x::T, at::AliasTable{T, I}) where {T, I}
-    shift = top_set_bit(typemax(T)) - top_set_bit(length(at.probability_alias)) + 1
+    shift = max(top_set_bit(typemax(T)) - top_set_bit(length(at.probability_alias)) + 1, 0)
     cell = (x >> shift) + 1
     # @assert (one(T) << shift) - one(T) == at.mask
     val = x & at.mask
