@@ -55,7 +55,7 @@ end
 using .MallocArrays
 
 export AliasTable
-VERSION >= v"1.11.0-DEV.469" && eval(Meta.parse("public sample, probabilities"))
+VERSION >= v"1.11.0-DEV.469" && eval(Meta.parse("public sample, probabilities, set_weights!"))
 
 const Memory = isdefined(Base, :Memory) ? Base.Memory : Vector # VERSION <= 1.10
 
@@ -83,6 +83,8 @@ at that index.
 The mapping can be accessed directly via
 [`AliasTables.sample(x::T, at::AliasTable{T, I})`](@ref AliasTables.sample)
 or indirectly via the `Random` API: `rand(at)`, `rand(rng, at)`, `rand(at, dims...)`, etc.
+
+See also [`AliasTables.set_weights`](@ref)
 
 # Example
 
@@ -127,10 +129,36 @@ end
 
 AliasTable(weights::AbstractVector{<:Real}; _normalize=true) = AliasTable{UInt64, Int}(weights; _normalize=_normalize)
 AliasTable{T}(weights::AbstractVector{<:Real}; _normalize=true) where T <: Unsigned = AliasTable{T, Int}(weights; _normalize=_normalize)
-function AliasTable{T, I}(weights; _normalize=true) where {T <: Unsigned, I <: Integer}
-    require_one_based_indexing(weights)
+function AliasTable{T, I}(weights::AbstractVector{<:Real}; _normalize=true) where {T <: Unsigned, I <: Integer}
     len = 1 << top_set_bit(length(weights) - 1) # next_or_eq_power_of_two(length(weights))
     probability_alias = Memory{Tuple{T, I}}(undef, len)
+    at = _AliasTable(probability_alias, length(weights))
+    set_weights!(at, weights, _normalize=_normalize)
+end
+
+"""
+    set_weights!(at::AliasTable, weights::AbstractVector{<:Real})
+
+Set the weights of `at` to `weights` and return `at`.
+
+Does not perform GC managed allocations.
+
+# Example
+```jldoctest
+julia> at = AliasTable([1, 3, 1])
+AliasTable([0x3333333333333334, 0x9999999999999999, 0x3333333333333333])
+
+julia> at === AliasTables.set_weights!(at, [1, 2, 1])
+true
+
+julia> at
+AliasTable([0x4000000000000000, 0x8000000000000000, 0x4000000000000000])
+```
+"""
+function set_weights!(at::AliasTable{T}, weights::AbstractVector{<:Real}; _normalize=true) where T
+    require_one_based_indexing(weights)
+    length(weights) == length(at) || throw(DimensionMismatch("length(weights) must equal length(at). Got $(length(weights)) and $(length(at)), respectively."))
+    probability_alias = at.probability_alias
     if _normalize
         (is_constant, sm) = checked_sum(weights)
         if is_constant
@@ -149,6 +177,7 @@ function AliasTable{T, I}(weights; _normalize=true) where {T <: Unsigned, I <: I
     else
         _alias_table!(probability_alias, weights)
     end
+    at
 end
 
 function _constant_alias_table!(probability_alias::Memory{Tuple{T, I}}, index, length) where {T, I}
@@ -156,7 +185,6 @@ function _constant_alias_table!(probability_alias::Memory{Tuple{T, I}}, index, l
     for i in eachindex(probability_alias)
         probability_alias[i] = (amount_redirected, index-i)
     end
-    _AliasTable(probability_alias, length)
 end
 
 function _lookup_alias_table!(probability_alias::Memory{Tuple{T, I}}, weights, mtz) where {T, I}
@@ -178,7 +206,6 @@ function _lookup_alias_table!(probability_alias::Memory{Tuple{T, I}}, weights, m
         (p,a) = probability_alias[j-len]
         probability_alias[j] = p, a-len
     end
-    _AliasTable(probability_alias, length(weights))
 end
 
 function minimum_trailing_zeros(x) # minimum(trailing_zeros, x), but faster.
@@ -316,8 +343,6 @@ function _alias_table!(probability_alias::Memory{Tuple{T, I}}, weights) where {T
         points_per_cell < thirsty_desired && throw(ArgumentError("sum(weights) is too high")) # Strictly thirsty, with no surplus to draw from.
         points_per_cell == thirsty_desired && (probability_alias[thirsty_i] = (0, 0)) # loosely thirsty, but satisfied. Zero out the undef.
     end
-
-    _AliasTable(probability_alias, length(weights))
 end
 
 """
