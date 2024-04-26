@@ -104,6 +104,16 @@ using Random, OffsetArrays, StableRNGs
             @test counts(Iterators.map(x -> AliasTables.sample(x, at), typemin(UInt16):typemax(UInt16)), 3) ==
                 2^16/16 * [10, 5, 1]
         end
+        @testset "Sampling when therer are more than typemax(T) weights" begin
+            let at = AliasTable{UInt8}(vcat([1, 1], fill(0, 2^8)))
+                @test counts(Iterators.map(x -> AliasTables.sample(x, at), 0x00:0xff), 258) ==
+                    vcat([128, 128], zeros(2^8))
+            end
+            let at = AliasTable{UInt8}(vcat([1], fill(0, 2^8)))
+                @test counts(Iterators.map(x -> AliasTables.sample(x, at), 0x00:0xff), 257) ==
+                    vcat(256, zeros(2^8))
+            end
+        end
     end
 
     @testset "Equality and hashing" begin
