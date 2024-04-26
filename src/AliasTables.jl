@@ -63,6 +63,7 @@ if isdefined(Base, :top_set_bit)
     const top_set_bit = Base.top_set_bit
 else
     top_set_bit(x::Integer) = 64 - leading_zeros(UInt64(x)) # VERSION <= 1.9
+    top_set_bit(x::Int) = 64 - leading_zeros(x)
 end
 
 if isdefined(Base, :require_one_based_indexing) # VERSION == 1.0
