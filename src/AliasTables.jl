@@ -657,11 +657,7 @@ function normalize_to_uint!(res::AbstractVector{T}, v, sm) where {T <: Unsigned}
     res
 end
 
-precompile(Tuple{typeof(<), UInt64, Float64})
-precompile(Tuple{Type{NamedTuple{(:_normalize,), T} where T<:Tuple}, Tuple{Bool}})
-precompile(Tuple{Type{AliasTable{T, I} where I<:Integer where T<:Unsigned}, Vector{Float64}})
-
-precompile(Tuple{typeof(top_set_bit), UInt64})
+precompile(Tuple{Type{AliasTable}, Vector{Float64}})
 precompile(Tuple{typeof(rand), AliasTable{UInt64, Int}})
 VERSION >= v"1.6" && precompile(Tuple{typeof(rand), typeof(Random.default_rng()), AliasTable{UInt64, Int}})
 
