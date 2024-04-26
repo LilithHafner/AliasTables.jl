@@ -17,6 +17,9 @@ of probabilities. For example, to create a table with a 30% chance of returning 
 `probabilities` must be an abstract vector of real numbers. The sum need not be 1 as the
 input will be automatically normalized.
 
+See [`AliasTables.set_weights!`](@ref) for a way to change the weights of an existing alias
+table without GC-managed allocations.
+
 ## Sampling from an AliasTable
 
 Sample from an `AliasTable` the same way you would sample from any sampleable object using
@@ -155,5 +158,6 @@ domain according to the specifications layed out by the Random stdlib.
 AliasTable
 AliasTables.sample
 AliasTables.probabilities
+AliasTables.set_weights!
 length(::AliasTable)
 ```
