@@ -52,6 +52,10 @@ using Random, OffsetArrays, StableRNGs
         @test AliasTable(OffsetVector([1,2], 0)) == AliasTable([1,2])
         @test_throws ArgumentError("sum(weights) is too high") AliasTable{UInt8}(vcat(fill(0x00, 2^8), 0x80, 0x81), _normalize=false) # _lookup_alias_table
         @test_throws ArgumentError("sum(weights) is too low") AliasTable{UInt8}(vcat(fill(0x00, 2^8), 0x80, 0x7f), _normalize=false) # _lookup_alias_table
+        at = AliasTable([1, 2, 3])
+        @test_throws DimensionMismatch("length(weights) must equal length(at). Got 4 and 3, respectively.") AliasTables.set_weights!(at, [1, 2, 3, 4])
+        @test_throws ArgumentError("offset arrays are not supported but got an array with index other than 1") AliasTables.set_weights!(at, OffsetVector([1,2,3], 1))
+        @test AliasTables.probabilities(float, AliasTables.set_weights!(at, OffsetVector([3,1,2], 0))) == [3,1,2] ./ 6
     end
 
     @testset "probabilities()" begin

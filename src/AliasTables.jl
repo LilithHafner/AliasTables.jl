@@ -106,36 +106,22 @@ struct AliasTable{T <: Unsigned, I <: Integer}
     mask::T
     probability_alias::Memory{Tuple{T, I}}
     length::I
-    """
-        _AliasTable(probability_alias::Memory{Tuple{T, I}})
 
-    Construct an `AliasTable` from a `Memory` of `(probability, alias)` pairs.
-
-    Callers are responsible for ensuring that
-
-        probability_alias == AliasTable(probabilities(_AliasTable(probability_alias))).probability_alias
-
-    i.e. that wherever they got the `probability_alias` from, it is a form that would be
-    produced by the internal default construcors (which are subject to change).
-
-    If callers fail to do this, then equality and hashing may be broken.
-    """
-    function _AliasTable(probability_alias::Memory{Tuple{T, I}}, len) where {T, I}
-        shift = max(8sizeof(T) - top_set_bit(length(probability_alias)) + 1, 0)
-        mask = (one(T) << shift) - one(T)
-        new{T, I}(mask, probability_alias, len)
+    function AliasTable{T, I}(weights::AbstractVector{<:Real}; _normalize=true) where {T <: Unsigned, I <: Integer}
+        shift = top_set_bit(length(weights) - 1)
+        probability_alias = Memory{Tuple{T, I}}(undef, 1 << shift)
+        mask = (one(T) << max(8sizeof(T) - shift, 0)) - one(T)
+        at = new{T, I}(mask, probability_alias, length(weights))
+        set_weights!(at, weights, _normalize=_normalize)
     end
-    global _AliasTable
 end
 
 AliasTable(weights::AbstractVector{<:Real}; _normalize=true) = AliasTable{UInt64, Int}(weights; _normalize=_normalize)
 AliasTable{T}(weights::AbstractVector{<:Real}; _normalize=true) where T <: Unsigned = AliasTable{T, Int}(weights; _normalize=_normalize)
-function AliasTable{T, I}(weights::AbstractVector{<:Real}; _normalize=true) where {T <: Unsigned, I <: Integer}
-    len = 1 << top_set_bit(length(weights) - 1) # next_or_eq_power_of_two(length(weights))
-    probability_alias = Memory{Tuple{T, I}}(undef, len)
-    at = _AliasTable(probability_alias, length(weights))
-    set_weights!(at, weights, _normalize=_normalize)
-end
+
+# The constructors (i.e. set_weights! and all its special cases) are responsible for
+# ensuring that `at1.probability_alias == at2.probability_alias` whenever `at1` and
+# `at2` have the same weights according to `AliasTables.probabilities(float, at)`
 
 """
     set_weights!(at::AliasTable, weights::AbstractVector{<:Real})
@@ -308,23 +294,23 @@ function _alias_table!(probability_alias::Memory{Tuple{T, I}}, weights) where {T
     while true
         # @show current_i, current_desired, points_per_cell
         if current_desired < points_per_cell # Surplus (strict)
-            while true                                                             # Find the next thirsty cell
+            while true                                                            # Find the next thirsty cell
                 ix = iterate(enum_weights, thirsty_state)
-                ix === nothing && throw(ArgumentError("sum(weights) is too low"))  # If there is no thirsty cell, there are more points than requsted by weights.
+                ix === nothing && throw(ArgumentError("sum(weights) is too low")) # If there is no thirsty cell, there are more points than requsted by weights.
                 (thirsty_i, thirsty_desired), thirsty_state = ix
                 thirsty_desired >= points_per_cell && break
             end
-            excess = points_per_cell - current_desired                             # Assign this many extra points
+            excess = points_per_cell - current_desired                            # Assign this many extra points
             probability_alias[current_i] = (excess, thirsty_i-current_i)          # To the targeted cell
-            current_i = thirsty_i                                                  # Now we have to make sure that thristy cell gets exactly what it wants and no more
-            current_desired = thirsty_desired - excess                             # It wants what it wants and hasn't already been transferred
+            current_i = thirsty_i                                                 # Now we have to make sure that thristy cell gets exactly what it wants and no more
+            current_desired = thirsty_desired - excess                            # It wants what it wants and hasn't already been transferred
         else                                 # Thirsty (loose)
             surplus_state_2 += true # Find the next surplus cell
             surplus_state_2 > len && break # If there is no surplus cell, handle below
             surplus_i = surplus_state_2
-            excess = points_per_cell                                               # Assign all the points
+            excess = points_per_cell                                              # Assign all the points
             probability_alias[surplus_i] = (points_per_cell, current_i-surplus_i) # From the synthetic cell with surplus to this cell
-            current_desired -= excess                                              # We now don't want as many points (and may even no longer be thristy)
+            current_desired -= excess                                             # We now don't want as many points (and may even no longer be thristy)
         end
     end
 
