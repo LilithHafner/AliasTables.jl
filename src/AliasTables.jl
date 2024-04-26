@@ -84,7 +84,7 @@ The mapping can be accessed directly via
 [`AliasTables.sample(x::T, at::AliasTable{T, I})`](@ref AliasTables.sample)
 or indirectly via the `Random` API: `rand(at)`, `rand(rng, at)`, `rand(at, dims...)`, etc.
 
-See also [`AliasTables.set_weights`](@ref)
+See also [`AliasTables.set_weights!`](@ref)
 
 # Example
 
