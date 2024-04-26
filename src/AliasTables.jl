@@ -73,7 +73,7 @@ else
 end
 
 """
-    AliasTable{T<:Unsigned=UInt, I<:Integer=Int}(weights::AbstractVector{<:Real})
+    AliasTable{T<:Unsigned=UInt64, I<:Integer=Int}(weights::AbstractVector{<:Real})
 
 An efficient data structure for sampling from a discrete distribution.
 
