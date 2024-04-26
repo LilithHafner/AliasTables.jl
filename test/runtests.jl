@@ -221,3 +221,10 @@ using Random, OffsetArrays, StableRNGs
         "CI" ∈ keys(ENV) && RegressionTests.test(skip_unsupported_platforms=true)
     end
 end
+
+let # Doesn't work in a testset
+    at = AliasTable(rand(600))
+    w = rand(1:10, 600)
+    allocs = @allocated AliasTables.set_weights!(at, w)
+    @test allocs == 0
+end
