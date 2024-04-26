@@ -295,23 +295,23 @@ function _alias_table!(probability_alias::Memory{Tuple{T, I}}, weights) where {T
     while true
         # @show current_i, current_desired, points_per_cell
         if current_desired < points_per_cell # Surplus (strict)
-            while true                                                             # Find the next thirsty cell
+            while true                                                            # Find the next thirsty cell
                 ix = iterate(enum_weights, thirsty_state)
-                ix === nothing && throw(ArgumentError("sum(weights) is too low"))  # If there is no thirsty cell, there are more points than requsted by weights.
+                ix === nothing && throw(ArgumentError("sum(weights) is too low")) # If there is no thirsty cell, there are more points than requsted by weights.
                 (thirsty_i, thirsty_desired), thirsty_state = ix
                 thirsty_desired >= points_per_cell && break
             end
-            excess = points_per_cell - current_desired                             # Assign this many extra points
+            excess = points_per_cell - current_desired                            # Assign this many extra points
             probability_alias[current_i] = (excess, thirsty_i-current_i)          # To the targeted cell
-            current_i = thirsty_i                                                  # Now we have to make sure that thristy cell gets exactly what it wants and no more
-            current_desired = thirsty_desired - excess                             # It wants what it wants and hasn't already been transferred
+            current_i = thirsty_i                                                 # Now we have to make sure that thristy cell gets exactly what it wants and no more
+            current_desired = thirsty_desired - excess                            # It wants what it wants and hasn't already been transferred
         else                                 # Thirsty (loose)
             surplus_state_2 += true # Find the next surplus cell
             surplus_state_2 > len && break # If there is no surplus cell, handle below
             surplus_i = surplus_state_2
-            excess = points_per_cell                                               # Assign all the points
+            excess = points_per_cell                                              # Assign all the points
             probability_alias[surplus_i] = (points_per_cell, current_i-surplus_i) # From the synthetic cell with surplus to this cell
-            current_desired -= excess                                              # We now don't want as many points (and may even no longer be thristy)
+            current_desired -= excess                                             # We now don't want as many points (and may even no longer be thristy)
         end
     end
 
