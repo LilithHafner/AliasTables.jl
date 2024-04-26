@@ -110,7 +110,7 @@ using Random, OffsetArrays, StableRNGs
         a = AliasTable([1, 2, 3])
         b = AliasTable([1, 2, 3, 0, 0])
         @test a != b
-        @test a.probability_alias == b.probability_alias
+        @test a.probability_alias != b.probability_alias
 
         data = [
             [
@@ -195,7 +195,8 @@ using Random, OffsetArrays, StableRNGs
     end
 
     @testset "Misc" begin
-        AliasTables._alias_table(UInt8, Int, (0x01, 0xff)) == AliasTable([1,255])
+        probability_alias = AliasTables.Memory{Tuple{UInt8, Int}}(undef, 2)
+        AliasTables._alias_table!(probability_alias, (0x01, 0xff)) == AliasTable([1,255])
     end
 
     @testset "RegressionTests" begin
