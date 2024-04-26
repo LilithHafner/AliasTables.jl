@@ -70,6 +70,14 @@ using Random, OffsetArrays, StableRNGs
         @test !Base.hasmethod(AliasTables.sample, Tuple{UInt32, AliasTable{UInt64, Int}})
     end
 
+    @testset "set_weights!" begin
+        at = AliasTable([1, 2, 3, 0, 0, 0])
+        at2 = AliasTable([1, 2, 3, 4, 5, 6])
+        @test at === AliasTables.set_weights!(at, [1, 2, 3, 4, 5, 6])
+        @test at == at2
+        @test at !== at2
+    end
+
     @testset "Exact" begin
         for i in 1:100
             p = rand(i)
