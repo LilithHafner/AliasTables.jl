@@ -106,36 +106,23 @@ struct AliasTable{T <: Unsigned, I <: Integer}
     mask::T
     probability_alias::Memory{Tuple{T, I}}
     length::I
-    """
-        _AliasTable(probability_alias::Memory{Tuple{T, I}})
 
-    Construct an `AliasTable` from a `Memory` of `(probability, alias)` pairs.
-
-    Callers are responsible for ensuring that
-
-        probability_alias == AliasTable(probabilities(_AliasTable(probability_alias))).probability_alias
-
-    i.e. that wherever they got the `probability_alias` from, it is a form that would be
-    produced by the internal default construcors (which are subject to change).
-
-    If callers fail to do this, then equality and hashing may be broken.
-    """
-    function _AliasTable(probability_alias::Memory{Tuple{T, I}}, len) where {T, I}
+    function AliasTable{T, I}(weights::AbstractVector{<:Real}; _normalize=true) where {T <: Unsigned, I <: Integer}
+        len = 1 << top_set_bit(length(weights) - 1) # next_or_eq_power_of_two(length(weights))
+        probability_alias = Memory{Tuple{T, I}}(undef, len)
         shift = max(8sizeof(T) - top_set_bit(length(probability_alias)) + 1, 0)
         mask = (one(T) << shift) - one(T)
-        new{T, I}(mask, probability_alias, len)
+        at = new{T, I}(mask, probability_alias, length(weights))
+        set_weights!(at, weights, _normalize=_normalize)
     end
-    global _AliasTable
 end
 
 AliasTable(weights::AbstractVector{<:Real}; _normalize=true) = AliasTable{UInt64, Int}(weights; _normalize=_normalize)
 AliasTable{T}(weights::AbstractVector{<:Real}; _normalize=true) where T <: Unsigned = AliasTable{T, Int}(weights; _normalize=_normalize)
-function AliasTable{T, I}(weights::AbstractVector{<:Real}; _normalize=true) where {T <: Unsigned, I <: Integer}
-    len = 1 << top_set_bit(length(weights) - 1) # next_or_eq_power_of_two(length(weights))
-    probability_alias = Memory{Tuple{T, I}}(undef, len)
-    at = _AliasTable(probability_alias, length(weights))
-    set_weights!(at, weights, _normalize=_normalize)
-end
+
+# The constructors (i.e. set_weights! and all its special cases) are responsible for
+# ensuring that `at1.probability_alias == at2.probability_alias` whenever `at1` and
+# `at2` have the same weights according to `AliasTables.probabilities(float, at)`
 
 """
     set_weights!(at::AliasTable, weights::AbstractVector{<:Real})
