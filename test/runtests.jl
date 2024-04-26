@@ -27,7 +27,10 @@ using Random, OffsetArrays, StableRNGs
               AliasTable{UInt8}([typemax(UInt32), typemax(UInt32)]) ==
               AliasTable(Float16[1, 1])
         @test rand(AliasTable{UInt8}(fill(0x80, 2^18))) in 1:2^18
+        @test AliasTable{UInt8}(vcat(fill(0x00, 2^8), 0x80, 0x80)) == # Issue #34
+                     AliasTable(vcat(fill(0x00, 2^8), 0x80, 0x80))
         @test length(AliasTable([1, 2, 3])) == 3
+        @test rand(AliasTable{UInt8}(vcat(fill(0, 500), 1))) == 501 # PR #36
     end
 
     @testset "Invalid weight error messages" begin
@@ -47,6 +50,8 @@ using Random, OffsetArrays, StableRNGs
         @test AliasTables.probabilities(float, AliasTable(UInt[unsigned(3)<<61, unsigned(2)<<61, unsigned(3)<<61], _normalize=false)) == [3,2,3] ./ 8
         @test_throws ArgumentError("offset arrays are not supported but got an array with index other than 1") AliasTable(OffsetVector([1,2], 1))
         @test AliasTable(OffsetVector([1,2], 0)) == AliasTable([1,2])
+        @test_throws ArgumentError("sum(weights) is too high") AliasTable{UInt8}(vcat(fill(0x00, 2^8), 0x80, 0x81), _normalize=false) # _lookup_alias_table
+        @test_throws ArgumentError("sum(weights) is too low") AliasTable{UInt8}(vcat(fill(0x00, 2^8), 0x80, 0x7f), _normalize=false) # _lookup_alias_table
     end
 
     @testset "probabilities()" begin
@@ -63,6 +68,14 @@ using Random, OffsetArrays, StableRNGs
         @test Base.hasmethod(AliasTables.sample, Tuple{UInt, AliasTable{UInt, Int}})
         @test !Base.hasmethod(AliasTables.sample, Tuple{Random.MersenneTwister, AliasTable{UInt, Int}})
         @test !Base.hasmethod(AliasTables.sample, Tuple{UInt32, AliasTable{UInt64, Int}})
+    end
+
+    @testset "set_weights!" begin
+        at = AliasTable([1, 2, 3, 0, 0, 0])
+        at2 = AliasTable([1, 2, 3, 4, 5, 6])
+        @test at === AliasTables.set_weights!(at, [1, 2, 3, 4, 5, 6])
+        @test at == at2
+        @test at !== at2
     end
 
     @testset "Exact" begin
@@ -99,13 +112,23 @@ using Random, OffsetArrays, StableRNGs
             @test counts(Iterators.map(x -> AliasTables.sample(x, at), typemin(UInt16):typemax(UInt16)), 3) ==
                 2^16/16 * [10, 5, 1]
         end
+        @testset "Sampling when there are more than typemax(T) weights" begin
+            let at = AliasTable{UInt8}(vcat([1, 1], fill(0, 2^8)))
+                @test counts(Iterators.map(x -> AliasTables.sample(x, at), 0x00:0xff), 258) ==
+                    vcat([128, 128], zeros(2^8))
+            end
+            let at = AliasTable{UInt8}(vcat([1], fill(0, 2^8)))
+                @test counts(Iterators.map(x -> AliasTables.sample(x, at), 0x00:0xff), 257) ==
+                    vcat(256, zeros(2^8))
+            end
+        end
     end
 
     @testset "Equality and hashing" begin
         a = AliasTable([1, 2, 3])
         b = AliasTable([1, 2, 3, 0, 0])
         @test a != b
-        @test a.probability_alias == b.probability_alias
+        @test a.probability_alias != b.probability_alias
 
         data = [
             [
@@ -132,6 +155,9 @@ using Random, OffsetArrays, StableRNGs
             ],[
                 AliasTable{UInt16}([1, 2, 3, 5]),
                 AliasTable{UInt16, Int8}([1, 2, 3, 5]),
+            ],[
+                AliasTable{UInt8}(vcat(fill(0x00, 2^8), 0x80, 0x80)), # Issue #34
+                AliasTable(vcat(fill(0x00, 2^8), 0x80, 0x80))
             ]
         ]
 
@@ -187,10 +213,18 @@ using Random, OffsetArrays, StableRNGs
     end
 
     @testset "Misc" begin
-        AliasTables._alias_table(UInt8, Int, (0x01, 0xff)) == AliasTable([1,255])
+        probability_alias = AliasTables.Memory{Tuple{UInt8, Int}}(undef, 2)
+        AliasTables._alias_table!(probability_alias, (0x01, 0xff)) == AliasTable([1,255])
     end
 
     @testset "RegressionTests" begin
         "CI" ∈ keys(ENV) && RegressionTests.test(skip_unsupported_platforms=true)
     end
+end
+
+let # Doesn't work in a testset
+    at = AliasTable(rand(600))
+    w = rand(1:10, 600)
+    allocs = @allocated AliasTables.set_weights!(at, w)
+    @test allocs == 0
 end

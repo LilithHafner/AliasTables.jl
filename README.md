@@ -41,16 +41,19 @@ julia> rand(at, 10)
 julia> using Chairmarks
 
 julia> @b at rand
-2.990 ns
+2.898 ns
 
 julia> @b rand(UInt)
-2.734 ns
+2.738 ns
 
 julia> @b rand(1000) AliasTable
-8.323 μs (5 allocs: 23.906 KiB)
+9.167 μs (2 allocs: 16.031 KiB)
 
 julia> @b AliasTable(rand(1000)) rand(_, 1000)
-1.420 μs (3 allocs: 7.875 KiB)
+1.506 μs (3 allocs: 7.875 KiB)
+
+julia> @b AliasTable(rand(1000)), rand(1000) AliasTables.set_weights!(_...)
+8.427 μs
 
 julia> using StatsBase
 

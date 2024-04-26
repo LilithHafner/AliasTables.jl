@@ -2,8 +2,60 @@ module AliasTables
 
 using Random
 
+# TODO switch to depending on https://github.com/LilithHafner/MallocArrays.jl instead
+# of copying the souce code
+module MallocArrays
+
+export malloc, free, MallocArray
+
+struct MallocArray{T, N} <: AbstractArray{T, N}
+    ptr::Ptr{T}
+    size::NTuple{N, Int}
+end
+
+"""
+    malloc(T::Type, dims::Int...) -> MallocArray{T, N} <: AbstractArray{T, N}
+
+Allocate a new array of type `T` and dimensions `dims` using the C stdlib's `malloc`.
+
+`T` must be an `isbitstype`.
+
+This array is not tracked by Julia's garbage collector, so it is the user's responsibility
+to call [`free`](@ref) on it when it is no longer needed.
+"""
+function malloc(::Type{T}, dims::Int...) where T
+    isbitstype(T) || throw(ArgumentError("malloc only supports isbits types"))
+    MallocArray(Ptr{T}(Libc.malloc(sizeof(T) * prod(dims))), dims)
+end
+
+"""
+    free(m::MallocArray)
+
+Free the memory allocated by a MallocArray.
+
+See also [`malloc`](@ref).
+"""
+function free(m::MallocArray)
+    Libc.free(m.ptr)
+end
+
+Base.size(m::MallocArray) = m.size
+Base.IndexStyle(::Type{<:MallocArray}) = IndexLinear()
+Base.@propagate_inbounds function Base.getindex(m::MallocArray, i::Int)
+    @boundscheck checkbounds(m, i)
+    unsafe_load(m.ptr, i)
+end
+Base.@propagate_inbounds function Base.setindex!(m::MallocArray, v, i::Int)
+    @boundscheck checkbounds(m, i)
+    unsafe_store!(m.ptr, v, i)
+    m
+end
+
+end
+using .MallocArrays
+
 export AliasTable
-VERSION >= v"1.11.0-DEV.469" && eval(Meta.parse("public sample, probabilities"))
+VERSION >= v"1.11.0-DEV.469" && eval(Meta.parse("public sample, probabilities, set_weights!"))
 
 const Memory = isdefined(Base, :Memory) ? Base.Memory : Vector # VERSION <= 1.10
 
@@ -11,6 +63,7 @@ if isdefined(Base, :top_set_bit)
     const top_set_bit = Base.top_set_bit
 else
     top_set_bit(x::Integer) = 64 - leading_zeros(UInt64(x)) # VERSION <= 1.9
+    top_set_bit(x::Int) = 64 - leading_zeros(x)
 end
 
 if isdefined(Base, :require_one_based_indexing) # VERSION == 1.0
@@ -31,6 +84,8 @@ at that index.
 The mapping can be accessed directly via
 [`AliasTables.sample(x::T, at::AliasTable{T, I})`](@ref AliasTables.sample)
 or indirectly via the `Random` API: `rand(at)`, `rand(rng, at)`, `rand(at, dims...)`, etc.
+
+See also [`AliasTables.set_weights!`](@ref)
 
 # Example
 
@@ -66,7 +121,7 @@ struct AliasTable{T <: Unsigned, I <: Integer}
     If callers fail to do this, then equality and hashing may be broken.
     """
     function _AliasTable(probability_alias::Memory{Tuple{T, I}}, len) where {T, I}
-        shift = 8sizeof(T) - top_set_bit(length(probability_alias)) + 1
+        shift = max(8sizeof(T) - top_set_bit(length(probability_alias)) + 1, 0)
         mask = (one(T) << shift) - one(T)
         new{T, I}(mask, probability_alias, len)
     end
@@ -75,33 +130,96 @@ end
 
 AliasTable(weights::AbstractVector{<:Real}; _normalize=true) = AliasTable{UInt64, Int}(weights; _normalize=_normalize)
 AliasTable{T}(weights::AbstractVector{<:Real}; _normalize=true) where T <: Unsigned = AliasTable{T, Int}(weights; _normalize=_normalize)
-function AliasTable{T, I}(weights; _normalize=true) where {T <: Unsigned, I <: Integer}
+function AliasTable{T, I}(weights::AbstractVector{<:Real}; _normalize=true) where {T <: Unsigned, I <: Integer}
+    len = 1 << top_set_bit(length(weights) - 1) # next_or_eq_power_of_two(length(weights))
+    probability_alias = Memory{Tuple{T, I}}(undef, len)
+    at = _AliasTable(probability_alias, length(weights))
+    set_weights!(at, weights, _normalize=_normalize)
+end
+
+"""
+    set_weights!(at::AliasTable, weights::AbstractVector{<:Real})
+
+Set the weights of `at` to `weights` and return `at`.
+
+Does not perform GC managed allocations.
+
+# Example
+```jldoctest
+julia> at = AliasTable([1, 3, 1])
+AliasTable([0x3333333333333334, 0x9999999999999999, 0x3333333333333333])
+
+julia> at === AliasTables.set_weights!(at, [1, 2, 1])
+true
+
+julia> at
+AliasTable([0x4000000000000000, 0x8000000000000000, 0x4000000000000000])
+```
+"""
+function set_weights!(at::AliasTable{T}, weights::AbstractVector{<:Real}; _normalize=true) where T
     require_one_based_indexing(weights)
+    length(weights) == length(at) || throw(DimensionMismatch("length(weights) must equal length(at). Got $(length(weights)) and $(length(at)), respectively."))
+    probability_alias = at.probability_alias
     if _normalize
         (is_constant, sm) = checked_sum(weights)
         if is_constant
-            _constant_alias_table(T, I, sm, length(weights))
+            _constant_alias_table!(probability_alias, sm, length(weights))
         elseif sm-true == typemax(T) # pre-normalized
-            _alias_table(T, I, weights)
+            _alias_table!(probability_alias, weights)
         else
-            norm = normalize_to_uint(T, weights, sm)
-            _alias_table(T, I, norm)
+            norm = malloc(T, length(weights))
+            try
+                normalize_to_uint!(norm, weights, sm)
+                _alias_table!(probability_alias, norm)
+            finally
+                free(norm)
+            end
         end
     else
-        _alias_table(T, I, weights)
+        _alias_table!(probability_alias, weights)
+    end
+    at
+end
+
+function _constant_alias_table!(probability_alias::Memory{Tuple{T, I}}, index, length) where {T, I}
+    amount_redirected = one(T) << (8*sizeof(T) - 1) # typemax(T)+1 / 2, typically more than points per cell!
+    for i in eachindex(probability_alias)
+        probability_alias[i] = (amount_redirected, index-i)
     end
 end
 
-function _constant_alias_table(::Type{T}, ::Type{I}, index, length) where {I, T}
-    bitshift = top_set_bit(index - 1)
-    len = 1 << bitshift
-    points_per_cell = one(T) << (8*sizeof(T) - bitshift) # typemax(T)+1 / len
-
-    probability_alias = Memory{Tuple{T, I}}(undef, len)
-    for i in 1:len
-        probability_alias[i] = (points_per_cell, index-i)
+function _lookup_alias_table!(probability_alias::Memory{Tuple{T, I}}, weights, mtz) where {T, I}
+    amount_redirected = one(T) << (8*sizeof(T) - 1) # typemax(T)+1 / 2, typically more than points per cell!
+    len = 1 << (8sizeof(T) - mtz)
+    len == 0 && throw(ArgumentError("Lookup table longer than typemax(Int)"))
+    len > length(probability_alias) && throw(ArgumentError("Lookup table longer than length(probablity_alias)"))
+    j = 1
+    for (i, w) in enumerate(weights)
+        j2 = j + Int(w >> mtz)
+        j2-1 > len && throw(ArgumentError("sum(weights) is too high"))
+        for k in j:j2-1
+            probability_alias[k] = (amount_redirected, i-k)
+        end
+        j = j2
     end
-    _AliasTable(probability_alias, length)
+    j <= len && throw(ArgumentError("sum(weights) is too low"))
+    for j in len+1:length(probability_alias)
+        (p,a) = probability_alias[j-len]
+        probability_alias[j] = p, a-len
+    end
+end
+
+function minimum_trailing_zeros(x) # minimum(trailing_zeros, x), but faster.
+    v, i = iterate(x)
+    orv = v
+    vi = v, i
+    while iseven(orv)
+        vi = iterate(x, i)
+        vi === nothing && break
+        v, i = vi
+        orv |= v
+    end
+    trailing_zeros(orv)
 end
 
 function throw_on_negatives(weights)
@@ -125,28 +243,23 @@ function get_only_nonzero(weights)
     only_nonzero
 end
 
-"Like Iterators.Take, but faster"
-struct HotTake{T<:Array}
-    xs::T
-    n::Int
-    HotTake(xs::Array, n::Int) = new{typeof(xs)}(xs, min(n, length(xs)))
-end
-Base.iterate(A::HotTake, i=1) = ((i - 1)%UInt < A.n%UInt ? (@inbounds A.xs[i], i + 1) : nothing)
-Base.length(A::HotTake) = A.n
-hot_take(xs::Array, n) = HotTake(xs, n)
-hot_take(xs, n) = Iterators.take(xs, n)
+function _alias_table!(probability_alias::Memory{Tuple{T, I}}, weights) where {T, I}
+    throw_on_negatives(weights)
+    onz = get_only_nonzero(weights)
+    onz == -2 || return _constant_alias_table!(probability_alias, onz, length(weights))
 
-function _alias_table(::Type{T}, ::Type{I}, weights0) where {I, T}
-    throw_on_negatives(weights0)
-    onz = get_only_nonzero(weights0)
-    onz == -2 || return _constant_alias_table(T, I, onz, length(weights0))
-
-    weights = hot_take(weights0, findlast(!iszero, weights0))
     bitshift = top_set_bit(length(weights) - 1)
     len = 1 << bitshift # next_or_eq_power_of_two(length(weights))
+    @assert len == length(probability_alias)
     points_per_cell = one(T) << (8*sizeof(T) - bitshift) # typemax(T)+1 / len
 
-    probability_alias = Memory{Tuple{T, I}}(undef, len)
+    # The reason this optimiation exists is to prevent when points_per_cell == 0.
+    # The reason it is applied so aggressively is so aggressively is so that
+    # AliasTables of different bitwidths are structurally similar for the same
+    # weights. This is important for equality and hashing.
+    mtz = minimum_trailing_zeros(weights)
+    lookup_table_bits = 8sizeof(T) - mtz
+    lookup_table_bits < bitshift && return _lookup_alias_table!(probability_alias, weights, mtz)
 
     # @show sum(weights)
     # @show weights
@@ -231,8 +344,6 @@ function _alias_table(::Type{T}, ::Type{I}, weights0) where {I, T}
         points_per_cell < thirsty_desired && throw(ArgumentError("sum(weights) is too high")) # Strictly thirsty, with no surplus to draw from.
         points_per_cell == thirsty_desired && (probability_alias[thirsty_i] = (0, 0)) # loosely thirsty, but satisfied. Zero out the undef.
     end
-
-    _AliasTable(probability_alias, length(weights0))
 end
 
 """
@@ -248,7 +359,7 @@ as well.
 See also [`AliasTable`](@ref), [`AliasTables.probabilities`](@ref)
 """
 function sample(x::T, at::AliasTable{T, I}) where {T, I}
-    shift = top_set_bit(typemax(T)) - top_set_bit(length(at.probability_alias)) + 1
+    shift = max(top_set_bit(typemax(T)) - top_set_bit(length(at.probability_alias)) + 1, 0)
     cell = (x >> shift) + 1
     # @assert (one(T) << shift) - one(T) == at.mask
     val = x & at.mask
@@ -335,12 +446,20 @@ julia> AliasTables.probabilities(AliasTable([0, 1, 0]))
 """
 function probabilities(at::AliasTable{T}) where T
     bitshift = top_set_bit(length(at.probability_alias) - 1)
-    points_per_cell = one(T) << (8*sizeof(T) - bitshift)#typemax(T)+1 / len
+    # points_per_cell = typemax(T)+1 / len, but at least 1, for
+    # cases where len > typemax(T)+1
+    points_per_cell = one(T) << max(0, 8*sizeof(T) - bitshift)
     probs = zeros(T, at.length)
     for (i, (prob, alias)) in enumerate(at.probability_alias)
-        probs[i + alias] += prob
-        keep = points_per_cell - prob
+        # For intertype hasing and equality purposes we sometimes store prob = 0.5
+        # even when that is above points_per_cell. Bound here:
+        prob2 = min(prob, points_per_cell)
+        probs[i + alias] += prob2
+        keep = points_per_cell - prob2
         iszero(keep) || (probs[i] += keep)
+        # When len > typemax(T)+1, the excess elements exist only for intertype
+        # hashing and equality purposes and should be ignored.
+        i > typemax(T) && break
     end
     if all(iszero, probs)
         probs[sample(zero(T), at)] = typemax(T)
@@ -406,12 +525,12 @@ function Base.:(==)(at1::AliasTable{T1}, at2::AliasTable{T2}) where {T1, T2}
     at1.length == at2.length || return false
     length(at1.probability_alias) == length(at2.probability_alias) || return false
     bitshift = 8(sizeof(T1) - sizeof(T2))
-    for (po1, po2) in zip(at1.probability_alias, at2.probability_alias)
-        po1[2] == po2[2] &&
+    for (pa1, pa2) in zip(at1.probability_alias, at2.probability_alias)
+        pa1[2] == pa2[2] &&
         if bitshift > 0
-            po1[1] == T1(po2[1]) << bitshift
+            pa1[1] == T1(pa2[1]) << bitshift
         else
-            T2(po1[1]) << -bitshift == po2[1]
+            T2(pa1[1]) << -bitshift == pa2[1]
         end || return false
     end
     true
@@ -426,9 +545,9 @@ function Base.hash(at::AliasTable, h::UInt)
     h ⊻= Sys.WORD_SIZE == 32 ? 0x7719cd5e : 0x0a0c5cfeeb10f090
     h = hash(at.length, h)
     # isempty(at.probability_alias) && return hash(0, h) # This should never happen, but it makes first not throw.
-    po1 = first(at.probability_alias)
+    pa1 = first(at.probability_alias)
     norm(x) = (ldexp(float(x[1]), -8sizeof(x[1])), x[2])
-    hash(MapVector{typeof(norm(po1)), typeof(norm), typeof(at.probability_alias)}(at.probability_alias, norm), h)
+    hash(MapVector{typeof(norm(pa1)), typeof(norm), typeof(at.probability_alias)}(at.probability_alias, norm), h)
 end
 
 ## Normalization
@@ -503,16 +622,18 @@ end
 # end
 
 widen_float(T, x) = typemax(T) < floatmax(x) ? x : widen_float(T, widen(x))
-function normalize_to_uint(::Type{T}, v, sm) where {T <: Unsigned}
+function normalize_to_uint!(res::AbstractVector{T}, v, sm) where {T <: Unsigned}
     if sm isa AbstractFloat
         shift = 8sizeof(T)-exponent(sm + sqrt(eps(sm)))-1
-        v2 = res = [floor(T, ldexp(widen_float(T, x), shift)) for x in v]
+        for i in eachindex(res, v)
+            res[i] = floor(T, ldexp(widen_float(T, v[i]), shift))
+        end
+        v2 = res
         onz = get_only_nonzero(v2)
         onz != -2 && return res
         sm2 = sum(res)
     else
         v2 = v
-        res = Vector{T}(undef, length(v))
         sm2 = sm
     end
 
