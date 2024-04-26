@@ -108,10 +108,9 @@ struct AliasTable{T <: Unsigned, I <: Integer}
     length::I
 
     function AliasTable{T, I}(weights::AbstractVector{<:Real}; _normalize=true) where {T <: Unsigned, I <: Integer}
-        len = 1 << top_set_bit(length(weights) - 1) # next_or_eq_power_of_two(length(weights))
-        probability_alias = Memory{Tuple{T, I}}(undef, len)
-        shift = max(8sizeof(T) - top_set_bit(length(probability_alias)) + 1, 0)
-        mask = (one(T) << shift) - one(T)
+        shift = top_set_bit(length(weights) - 1)
+        probability_alias = Memory{Tuple{T, I}}(undef, 1 << shift)
+        mask = (one(T) << max(8sizeof(T) - shift, 0)) - one(T)
         at = new{T, I}(mask, probability_alias, length(weights))
         set_weights!(at, weights, _normalize=_normalize)
     end
