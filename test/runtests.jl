@@ -34,6 +34,8 @@ using Random, OffsetArrays, StableRNGs
                      AliasTable(vcat(fill(0x00, 2^8), 0x80, 0x80))
         @test length(AliasTable([1, 2, 3])) == 3
         @test rand(AliasTable{UInt8}(vcat(fill(0, 500), 1))) == 501 # PR #36
+        @test AliasTable{UInt8}(fill(1, 1000)) == AliasTable{UInt8}(fill(1.0, 1000)) # Issue #43
+        @test AliasTables.probabilities(AliasTable{UInt8}(vcat(4.0, fill(1.0, 1000))))[1] ∈ 1:2
     end
 
     @testset "Invalid weight error messages" begin
@@ -152,10 +154,14 @@ using Random, OffsetArrays, StableRNGs
                 AliasTable([1, 2.0001, 5]),
             ],[
                 AliasTable([0,0,0,0,1]),
+            ],[
                 AliasTable([1e-70,0,0,0,1]),
+                AliasTable([2,0,0,0,typemax(UInt)-1]),
             ],[
                 AliasTable([0,0,0,0,1,0,0,0,0,0,0,0]),
+            ],[
                 AliasTable([1e-70,0,0,0,1,0,0,0,0,0,0,1e-70]),
+                AliasTable([2,1,0,0,typemax(UInt)-3,0,0,0,0,0,0,1]),
             ],[
                 AliasTable([1, 2, 3, 5]),
                 AliasTable{UInt64, Int8}([1, 2, 3, 5]),
