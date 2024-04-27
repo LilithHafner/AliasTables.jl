@@ -612,11 +612,10 @@ function normalize_to_uint!(res::AbstractVector{T}, v, sm) where {T <: Unsigned}
     if sm isa AbstractFloat
         shift = 8sizeof(T)-exponent(sm + sqrt(eps(sm)))-1
         for i in eachindex(res, v)
-            res[i] = floor(T, ldexp(widen_float(T, v[i]), shift))
+            # Rounding up could cause sm2 to overflow in AliasTable(vcat(1.0-sqrt(eps(1.0)), fill(1e-100, 2^38))
+            res[i] = ceil(T, ldexp(widen_float(T, v[i]), shift))
         end
         v2 = res
-        onz = get_only_nonzero(v2)
-        onz != -2 && return res
         sm2 = sum(res)
     else
         v2 = v
