@@ -162,6 +162,7 @@ function set_weights!(at::AliasTable{T}, weights::AbstractVector{<:Real}; _norma
             end
         end
     else
+        throw_on_negatives(weights)
         _alias_table!(probability_alias, weights)
     end
     at
@@ -230,7 +231,6 @@ function get_only_nonzero(weights)
 end
 
 function _alias_table!(probability_alias::Memory{Tuple{T, I}}, weights) where {T, I}
-    throw_on_negatives(weights)
     onz = get_only_nonzero(weights)
     onz == -2 || return _constant_alias_table!(probability_alias, onz, length(weights))
 
