@@ -625,7 +625,7 @@ function normalize_to_uint!(res::AbstractVector{T}, v, sm) where {T <: Unsigned}
 
     sm3 = zero(T)
 
-    T2 = promote_type(widen(T), typeof(sm2))
+    T2 = widen(promote_type(T, typeof(sm2)))
     for (i,x) in enumerate(v2)
         # @assert x < sm2
         # @assert sm2 != 0

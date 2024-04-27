@@ -25,7 +25,10 @@ using Random, OffsetArrays, StableRNGs
               AliasTable([1,1]) ==
               AliasTable{UInt8}(UInt128[typemax(UInt64), typemax(UInt64)] .<< 5) ==
               AliasTable{UInt8}([typemax(UInt32), typemax(UInt32)]) ==
-              AliasTable(Float16[1, 1])
+              AliasTable(Float16[1, 1]) ==
+              AliasTable{UInt8}([0x0ffffffffffffffff000000000000000, 0x0ffffffffffffffff000000000000000]) == # Issue #44
+              AliasTable([0x0ffffffffffffffff000000000000000, 0x0ffffffffffffffff000000000000000]) ==
+              AliasTable{UInt32}([0x0000fffffff00000, 0x0000fffffff00000])
         @test rand(AliasTable{UInt8}(fill(0x80, 2^18))) in 1:2^18
         @test AliasTable{UInt8}(vcat(fill(0x00, 2^8), 0x80, 0x80)) == # Issue #34
                      AliasTable(vcat(fill(0x00, 2^8), 0x80, 0x80))
