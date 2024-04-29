@@ -24,7 +24,7 @@ using Random, OffsetArrays, StableRNGs
               AliasTable{UInt8}([0x81, 0x81]) ==
               AliasTable([1,1]) ==
               AliasTable{UInt8}(UInt128[typemax(UInt64), typemax(UInt64)] .<< 5) ==
-              AliasTable{UInt8}([typemax(UInt32), typemax(UInt32)]) ==
+              AliasTable{UInt8}(fill(typemax(Sys.WORD_SIZE == 32 ? UInt16 : UInt32), 2)) ==
               AliasTable(Float16[1, 1]) ==
               AliasTable{UInt8}([0x0ffffffffffffffff000000000000000, 0x0ffffffffffffffff000000000000000]) == # Issue #44
               AliasTable([0x0ffffffffffffffff000000000000000, 0x0ffffffffffffffff000000000000000]) ==
@@ -49,10 +49,11 @@ using Random, OffsetArrays, StableRNGs
         @test_throws ArgumentError("weights must be non-empty") AliasTable(Int[])
         @test_throws ArgumentError("weights must be non-empty") AliasTable(UInt[])
         @test_throws ArgumentError("sum(weights) is too low") AliasTable(UInt[123, 456], _normalize=false)
-        @test_throws ArgumentError("sum(weights) is too high") AliasTable(UInt[unsigned(3)<<62, unsigned(2)<<62, unsigned(3)<<62], _normalize=false)
-        @test_throws ArgumentError("sum(weights) overflows") AliasTable(UInt[unsigned(3)<<62, unsigned(2)<<62, unsigned(3)<<62])
-        @test AliasTables.probabilities(float, AliasTable(UInt[unsigned(3)<<61, unsigned(2)<<61, unsigned(3)<<61])) == [3,2,3] ./ 8
-        @test AliasTables.probabilities(float, AliasTable(UInt[unsigned(3)<<61, unsigned(2)<<61, unsigned(3)<<61], _normalize=false)) == [3,2,3] ./ 8
+        @test_throws ArgumentError("sum(weights) is too high") AliasTable([UInt64(3)<<62, UInt64(2)<<62, UInt64(3)<<62], _normalize=false)
+        @test_throws ArgumentError("sum(weights) overflows") AliasTable([UInt64(3)<<62, UInt64(2)<<62, UInt64(3)<<62])
+        shift = Sys.WORD_SIZE-3
+        @test AliasTables.probabilities(float, AliasTable{UInt}(UInt[unsigned(3)<<shift, unsigned(2)<<shift, unsigned(3)<<shift])) == [3,2,3] ./ 8
+        @test AliasTables.probabilities(float, AliasTable{UInt}(UInt[unsigned(3)<<shift, unsigned(2)<<shift, unsigned(3)<<shift], _normalize=false)) == [3,2,3] ./ 8
         @test_throws ArgumentError("offset arrays are not supported but got an array with index other than 1") AliasTable(OffsetVector([1,2], 1))
         @test AliasTable(OffsetVector([1,2], 0)) == AliasTable([1,2])
         @test_throws ArgumentError("sum(weights) is too high") AliasTable{UInt8}(vcat(fill(0x00, 2^8), 0x80, 0x81), _normalize=false) # _lookup_alias_table
@@ -61,12 +62,18 @@ using Random, OffsetArrays, StableRNGs
         @test_throws DimensionMismatch("length(weights) must equal length(at). Got 4 and 3, respectively.") AliasTables.set_weights!(at, [1, 2, 3, 4])
         @test_throws ArgumentError("offset arrays are not supported but got an array with index other than 1") AliasTables.set_weights!(at, OffsetVector([1,2,3], 1))
         @test AliasTables.probabilities(float, AliasTables.set_weights!(at, OffsetVector([3,1,2], 0))) == [3,1,2] ./ 6
+        @test_throws ArgumentError("sum(weights) overflows, but just barely") AliasTable([typemax(UInt128), 1])
+        if Sys.WORD_SIZE == 32
+            @test_throws ArgumentError("sum(weights) overflows, but just barely") AliasTable(UInt32[0x60000000, 0x40000000, 0x60000000])
+        else
+            @test AliasTable(UInt32[0x60000000, 0x40000000, 0x60000000]) == AliasTable([6,4,6])
+        end
     end
 
     @testset "probabilities()" begin
         @test AliasTables.probabilities(float, AliasTable([1, 2, 3])) == [1, 2, 3]/6
         @test AliasTables.probabilities(float, AliasTable([1, 2, 3, 0, 0])) == [1, 2, 3, 0, 0]/6
-        @test AliasTables.probabilities(AliasTable([1, 2, 3, 0, 2])) == [1, 2, 3, 0, 2] .<< 61
+        @test AliasTables.probabilities(AliasTable([1, 2, 3, 0, 2])) == Int64[1, 2, 3, 0, 2] .<< 61
         p = AliasTables.probabilities(AliasTable{UInt8}(fill(0x80, 2^18)))
         @test p isa Vector{UInt8}
         @test sum(p) == 256
@@ -91,19 +98,19 @@ using Random, OffsetArrays, StableRNGs
         for i in 1:100
             p = rand(i)
             at = AliasTable(p)
-            @test maximum(abs, AliasTables.probabilities(at) ./ (big(typemax(UInt))+1) .- p ./ sum(big, p)) ≤ .5^64
+            @test maximum(abs, AliasTables.probabilities(at) ./ (big(typemax(UInt64))+1) .- p ./ sum(big, p)) ≤ .5^64
             @test AliasTables.probabilities(float, at) ≈  p ./ sum(p)
             @test AliasTable(AliasTables.probabilities(at)) == at
             # @test AliasTable(AliasTables.probabilities(float, at)) == at
 
             if i == 1
-                p2 = [typemax(UInt)]
+                p2 = [typemax(UInt64)]
             else
-                p2 = floor.(UInt, (typemax(UInt)/sum(p)) .* p)
-                p2[end] = typemax(UInt) - sum(p2[1:end-1]) + 1
+                p2 = floor.(UInt64, (typemax(UInt64)/sum(p)) .* p)
+                p2[end] = typemax(UInt64) - sum(p2[1:end-1]) + 1
             end
             at2 = AliasTable(p2)
-            @test maximum(abs, AliasTables.probabilities(at2) ./ (big(typemax(UInt))+1) .- p2 ./ sum(big, p2)) ≤ .5^64
+            @test maximum(abs, AliasTables.probabilities(at2) ./ (big(typemax(UInt64))+1) .- p2 ./ sum(big, p2)) ≤ .5^64
             @test AliasTables.probabilities(at2) == p2
             @test AliasTables.probabilities(float, at2) ≈  p ./ sum(p)
             # @test AliasTable(AliasTables.probabilities(float, at2)) == at2
@@ -147,7 +154,7 @@ using Random, OffsetArrays, StableRNGs
                 AliasTable{UInt16, Int32}([1,2,5]),
                 AliasTable{UInt16}([1,2,5]),
                 AliasTable{UInt, Int32}([1,2,5]),
-                AliasTable(UInt[unsigned(1)<<61, unsigned(2)<<61, unsigned(5)<<61]),
+                AliasTable([UInt64(1)<<61, UInt64(2)<<61, UInt64(5)<<61]),
             ],[
                 AliasTable([1, 2, 5, 0, 0]),
             ],[
@@ -156,12 +163,12 @@ using Random, OffsetArrays, StableRNGs
                 AliasTable([0,0,0,0,1]),
             ],[
                 AliasTable([1e-70,0,0,0,1]),
-                AliasTable([2,0,0,0,typemax(UInt)-1]),
+                AliasTable([2,0,0,0,typemax(UInt64)-1]),
             ],[
                 AliasTable([0,0,0,0,1,0,0,0,0,0,0,0]),
             ],[
                 AliasTable([1e-70,0,0,0,1,0,0,0,0,0,0,1e-70]),
-                AliasTable([2,1,0,0,typemax(UInt)-3,0,0,0,0,0,0,1]),
+                AliasTable([2,1,0,0,typemax(UInt64)-3,0,0,0,0,0,0,1]),
             ],[
                 AliasTable([1, 2, 3, 5]),
                 AliasTable{UInt64, Int8}([1, 2, 3, 5]),
@@ -227,7 +234,8 @@ using Random, OffsetArrays, StableRNGs
 
     @testset "Misc" begin
         probability_alias = AliasTables.Memory{Tuple{UInt8, Int}}(undef, 2)
-        AliasTables._alias_table!(probability_alias, (0x01, 0xff)) == AliasTable([1,255])
+        AliasTables._alias_table!(probability_alias, (0x01, 0xff))
+        @test probability_alias == Tuple{UInt8, Int32}[(0x7f, 1), (0x00, 0)]
     end
 
     @testset "RegressionTests" begin
