@@ -152,6 +152,8 @@ function set_weights!(at::AliasTable{T}, weights::AbstractVector{<:Real}; _norma
             _constant_alias_table!(probability_alias, sm, length(weights))
         elseif sm-true == typemax(T) # pre-normalized
             _alias_table!(probability_alias, weights)
+        elseif iszero(sm)
+            throw(ArgumentError("sum(weights) overflows, but just barely"))
         else
             norm = malloc(T, length(weights))
             try
