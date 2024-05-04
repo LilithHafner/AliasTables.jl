@@ -353,6 +353,26 @@ function sample(x::T, at::AliasTable{T, I}) where {T, I}
     (((val < prob) * alias + cell)%I)::I
 end
 
+function _sample!(dest::AbstractArray{I}, at::AliasTable{T, I}) where {T, I}
+    shift = max(top_set_bit(typemax(T)) - top_set_bit(length(at.probability_alias)) + 1, 0)
+    @inbounds @simd ivdep for i in eachindex(dest)
+        x = reinterpret(T, dest[i])
+        cell = (x >> shift) + 1
+        # @assert (one(T) << shift) - one(T) == at.mask
+        val = x & at.mask
+        prob, alias = at.probability_alias[cell%Int] # see proof below
+        dest[i] = (((val < prob) * alias + cell)%I)::I
+    end
+    dest
+end
+
+function Random.rand!(rng::Union{Random.TaskLocalRNG, Random.XoshiroSimd.Xoshiro}, dst::Array{I}, st::Random.SamplerTrivial{AliasTable{T, I}, I}) where {T, I}
+    @assert sizeof(T) == sizeof(I)
+    rand!(rng, dst)
+    _sample!(dst, st.self)
+    dst
+end
+
 #=
 Loose justification that @inbounds is safe:
 
