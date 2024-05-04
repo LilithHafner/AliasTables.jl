@@ -349,27 +349,35 @@ function sample(x::T, at::AliasTable{T, I}) where {T, I}
     cell = (x >> shift) + 1
     # @assert (one(T) << shift) - one(T) == at.mask
     val = x & at.mask
-    @inbounds prob, alias = at.probability_alias[cell%Int] # see proof below
+    prob, alias = @inbounds at.probability_alias[cell%Int] # see proof below
     (((val < prob) * alias + cell)%I)::I
 end
 
-function _sample!(dest::AbstractArray{I}, at::AliasTable{T, I}) where {T, I}
+function _sample!(xs::AbstractArray{I}, at::AliasTable{T, I}) where {T<:Base.BitUnsigned, I<:Base.BitInteger}
+    @assert sizeof(I) <= sizeof(T)
     shift = max(top_set_bit(typemax(T)) - top_set_bit(length(at.probability_alias)) + 1, 0)
-    @inbounds @simd ivdep for i in eachindex(dest)
-        x = reinterpret(T, dest[i])
+    # @assert (one(T) << shift) - one(T) == at.mask
+    @simd ivdep for i in eachindex(xs)
+        x = xs[i]%T
         cell = (x >> shift) + 1
-        # @assert (one(T) << shift) - one(T) == at.mask
         val = x & at.mask
-        prob, alias = at.probability_alias[cell%Int] # see proof below
-        dest[i] = (((val < prob) * alias + cell)%I)::I
+        prob, alias = @inbounds at.probability_alias[cell%Int] # see proof below
+        xs[i] = (((val < prob) * alias + cell)%I)::I
     end
-    dest
+    xs
 end
 
-function Random.rand!(rng::Union{Random.TaskLocalRNG, Random.XoshiroSimd.Xoshiro}, dst::Array{I}, st::Random.SamplerTrivial{AliasTable{T, I}, I}) where {T, I}
-    @assert sizeof(T) == sizeof(I)
-    rand!(rng, dst)
-    _sample!(dst, st.self)
+function Random.rand!(rng::Union{Random.TaskLocalRNG, Random.XoshiroSimd.Xoshiro},
+                      dst::Array{I},
+                      st::Random.SamplerTrivial{AliasTable{T, I}, I}) where {T<:Base.BitUnsigned, I<:Base.BitInteger}
+    if sizeof(I) <= sizeof(T)
+        rand!(rng, dst)
+        _sample!(dst, st.self)
+    else
+        for i in eachindex(dst)
+            dst[i] = rand(rng, st)
+        end
+    end
     dst
 end
 
