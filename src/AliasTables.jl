@@ -367,7 +367,7 @@ function _sample!(xs::AbstractArray{I}, at::AliasTable{T, I}) where {T<:Base.Bit
     xs
 end
 
-function Random.rand!(rng::Union{Random.TaskLocalRNG, Random.XoshiroSimd.Xoshiro},
+function Random.rand!(rng::Random.AbstractRNG,
                       dst::Array{I},
                       st::Random.SamplerTrivial{AliasTable{T, I}, I}) where {T<:Base.BitUnsigned, I<:Base.BitInteger}
     if sizeof(I) == sizeof(T)
