@@ -108,6 +108,8 @@ struct AliasTable{T <: Unsigned, I <: Integer}
     length::I
 
     function AliasTable{T, I}(weights::AbstractVector{<:Real}; _normalize=true) where {T <: Unsigned, I <: Integer}
+        length(weights) > typemax(I) && throw(ArgumentError(
+            "length(weights) must be less than typemax(I). Got $(length(weights)) and $(typemax(I)), respectively."))
         shift = top_set_bit(length(weights) - 1)
         probability_alias = Memory{Tuple{T, I}}(undef, 1 << shift)
         mask = (one(T) << max(8sizeof(T) - shift, 0)) - one(T)
@@ -173,7 +175,7 @@ end
 function _constant_alias_table!(probability_alias::Memory{Tuple{T, I}}, index, length) where {T, I}
     amount_redirected = one(T) << (8*sizeof(T) - 1) # typemax(T)+1 / 2, typically more than points per cell!
     for i in eachindex(probability_alias)
-        probability_alias[i] = (amount_redirected, index-i)
+        probability_alias[i] = (amount_redirected, (index-i)%I)
     end
 end
 
@@ -187,14 +189,14 @@ function _lookup_alias_table!(probability_alias::Memory{Tuple{T, I}}, weights, m
         j2 = j + Int(w >> mtz)
         j2-1 > len && throw(ArgumentError("sum(weights) is too high"))
         for k in j:j2-1
-            probability_alias[k] = (amount_redirected, i-k)
+            probability_alias[k] = (amount_redirected, (i-k)%I)
         end
         j = j2
     end
     j <= len && throw(ArgumentError("sum(weights) is too low"))
     for j in len+1:length(probability_alias)
         (p,a) = probability_alias[j-len]
-        probability_alias[j] = p, a-len
+        probability_alias[j] = p, (a-len)%I
     end
 end
 
@@ -267,7 +269,7 @@ function _alias_table!(probability_alias::Memory{Tuple{T, I}}, weights) where {T
                 thirsty_desired >= points_per_cell && break
             end
             excess = points_per_cell - current_desired                            # Assign this many extra points
-            probability_alias[current_i] = (excess, thirsty_i-current_i)          # To the targeted cell
+            probability_alias[current_i] = (excess, (thirsty_i-current_i)%I)      # To the targeted cell
             current_i = thirsty_i                                                 # Now we have to make sure that thristy cell gets exactly what it wants and no more
             current_desired = thirsty_desired - excess                            # It wants what it wants and hasn't already been transferred
         else                                 # Thirsty (loose)
@@ -278,7 +280,7 @@ function _alias_table!(probability_alias::Memory{Tuple{T, I}}, weights) where {T
                 surplus_desired < points_per_cell && break
             end
             excess = points_per_cell - surplus_desired                            # Assign this many extra points
-            probability_alias[surplus_i] = (excess, current_i-surplus_i)          # From the cell with surplus to this cell
+            probability_alias[surplus_i] = (excess, (current_i-surplus_i)%I)      # From the cell with surplus to this cell
             current_desired -= excess                                             # We now don't want as many points (and may even no longer be thristy)
         end
     end
@@ -296,23 +298,23 @@ function _alias_table!(probability_alias::Memory{Tuple{T, I}}, weights) where {T
     while true
         # @show current_i, current_desired, points_per_cell
         if current_desired < points_per_cell # Surplus (strict)
-            while true                                                            # Find the next thirsty cell
+            while true                                                                # Find the next thirsty cell
                 ix = iterate(enum_weights, thirsty_state)
-                ix === nothing && throw(ArgumentError("sum(weights) is too low")) # If there is no thirsty cell, there are more points than requsted by weights.
+                ix === nothing && throw(ArgumentError("sum(weights) is too low"))     # If there is no thirsty cell, there are more points than requsted by weights.
                 (thirsty_i, thirsty_desired), thirsty_state = ix
                 thirsty_desired >= points_per_cell && break
             end
-            excess = points_per_cell - current_desired                            # Assign this many extra points
-            probability_alias[current_i] = (excess, thirsty_i-current_i)          # To the targeted cell
-            current_i = thirsty_i                                                 # Now we have to make sure that thristy cell gets exactly what it wants and no more
-            current_desired = thirsty_desired - excess                            # It wants what it wants and hasn't already been transferred
+            excess = points_per_cell - current_desired                                # Assign this many extra points
+            probability_alias[current_i] = (excess, (thirsty_i-current_i)%I)          # To the targeted cell
+            current_i = thirsty_i                                                     # Now we have to make sure that thristy cell gets exactly what it wants and no more
+            current_desired = thirsty_desired - excess                                # It wants what it wants and hasn't already been transferred
         else                                 # Thirsty (loose)
             surplus_state_2 += true # Find the next surplus cell
             surplus_state_2 > len && break # If there is no surplus cell, handle below
             surplus_i = surplus_state_2
-            excess = points_per_cell                                              # Assign all the points
-            probability_alias[surplus_i] = (points_per_cell, current_i-surplus_i) # From the synthetic cell with surplus to this cell
-            current_desired -= excess                                             # We now don't want as many points (and may even no longer be thristy)
+            excess = points_per_cell                                                  # Assign all the points
+            probability_alias[surplus_i] = (points_per_cell, (current_i-surplus_i)%I) # From the synthetic cell with surplus to this cell
+            current_desired -= excess                                                 # We now don't want as many points (and may even no longer be thristy)
         end
     end
 
@@ -460,7 +462,7 @@ julia> AliasTables.probabilities(AliasTable([0, 1, 0]))
  0x0000000000000000
 ```
 """
-function probabilities(at::AliasTable{T}) where T
+function probabilities(at::AliasTable{T, I}) where {T, I}
     bitshift = top_set_bit(length(at.probability_alias) - 1)
     # points_per_cell = typemax(T)+1 / len, but at least 1, for
     # cases where len > typemax(T)+1
@@ -470,7 +472,7 @@ function probabilities(at::AliasTable{T}) where T
         # For intertype hasing and equality purposes we sometimes store prob = 0.5
         # even when that is above points_per_cell. Bound here:
         prob2 = min(prob, points_per_cell)
-        probs[i + alias] += prob2
+        probs[I(i-1) + alias + one(I)] += prob2
         keep = points_per_cell - prob2
         iszero(keep) || (probs[i] += keep)
         # When len > typemax(T)+1, the excess elements exist only for intertype
@@ -536,13 +538,14 @@ isdefined(Base, :typeinfo_implicit) && (Base.typeinfo_implicit(::Type{<:AliasTab
 # These naive implementations are equivalent to computing equality
 # based on probabilities because the constrors are deterministic w.r.t
 # the input weights exclusind trailing zeros and the length is tracked.
-Base.:(==)(at1::AliasTable{T}, at2::AliasTable{T}) where T = at1.length == at2.length && at1.probability_alias == at2.probability_alias
-function Base.:(==)(at1::AliasTable{T1}, at2::AliasTable{T2}) where {T1, T2}
+Base.:(==)(at1::AliasTable{T, I}, at2::AliasTable{T, I}) where {T, I} =
+    at1.length == at2.length && at1.probability_alias == at2.probability_alias
+function Base.:(==)(at1::AliasTable{T1, I1}, at2::AliasTable{T2, I2}) where {T1, T2, I1, I2}
     at1.length == at2.length || return false
     length(at1.probability_alias) == length(at2.probability_alias) || return false
     bitshift = 8(sizeof(T1) - sizeof(T2))
-    for (pa1, pa2) in zip(at1.probability_alias, at2.probability_alias)
-        pa1[2] == pa2[2] &&
+    for (i,(pa1, pa2)) in enumerate(zip(at1.probability_alias, at2.probability_alias))
+        pa1[2]+I1(i-1)+one(I2) == pa2[2]+I2(i-1)+one(I2) &&
         if bitshift > 0
             pa1[1] == T1(pa2[1]) << bitshift
         else
@@ -551,19 +554,19 @@ function Base.:(==)(at1::AliasTable{T1}, at2::AliasTable{T2}) where {T1, T2}
     end
     true
 end
-struct MapVector{T, F, P} <: AbstractVector{T}
+struct EnumerateMapVector{T, F, P} <: AbstractVector{T}
     parent::P
     f::F
 end
-Base.size(mv::MapVector) = size(mv.parent)
-Base.getindex(mv::MapVector{T, F, P}, i) where {T, F, P} = mv.f(mv.parent[i])
+Base.size(mv::EnumerateMapVector) = size(mv.parent)
+Base.getindex(mv::EnumerateMapVector{T, F, P}, i) where {T, F, P} = mv.f(i, mv.parent[i])
 function Base.hash(at::AliasTable, h::UInt)
     h ⊻= Sys.WORD_SIZE == 32 ? 0x7719cd5e : 0x0a0c5cfeeb10f090
     h = hash(at.length, h)
     # isempty(at.probability_alias) && return hash(0, h) # This should never happen, but it makes first not throw.
     pa1 = first(at.probability_alias)
-    norm(x) = (ldexp(float(x[1]), -8sizeof(x[1])), x[2])
-    hash(MapVector{typeof(norm(pa1)), typeof(norm), typeof(at.probability_alias)}(at.probability_alias, norm), h)
+    norm(i, x) = (ldexp(float(x[1]), -8sizeof(x[1])), x[2]+typeof(x[2])(i-1)+typeof(x[2])(1))
+    hash(EnumerateMapVector{typeof(norm(1, pa1)), typeof(norm), typeof(at.probability_alias)}(at.probability_alias, norm), h)
 end
 
 ## Normalization
