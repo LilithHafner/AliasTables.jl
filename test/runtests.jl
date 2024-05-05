@@ -23,6 +23,7 @@ using Random, OffsetArrays, StableRNGs
         @test AliasTable{UInt8}([0x80, 0x80]) ==
               AliasTable{UInt8}([0x81, 0x81]) ==
               AliasTable([1,1]) ==
+              AliasTable{UInt, UInt}([1,1]) ==
               AliasTable{UInt8}(UInt128[typemax(UInt64), typemax(UInt64)] .<< 5) ==
               AliasTable{UInt8}(fill(typemax(Sys.WORD_SIZE == 32 ? UInt16 : UInt32), 2)) ==
               AliasTable(Float16[1, 1]) ==
@@ -68,6 +69,8 @@ using Random, OffsetArrays, StableRNGs
         else
             @test AliasTable(UInt32[0x60000000, 0x40000000, 0x60000000]) == AliasTable([6,4,6])
         end
+        @test_throws ArgumentError("length(weights) must be less than typemax(I). Got 256 and 255, respectively.") AliasTable{UInt64, UInt8}(rand(256))
+        @test_throws ArgumentError("length(weights) must be less than typemax(I). Got 128 and 127, respectively.") AliasTable{UInt64, Int8}(rand(128))
     end
 
     @testset "probabilities()" begin
@@ -140,8 +143,8 @@ using Random, OffsetArrays, StableRNGs
         end
     end
 
-    @testset "Bulk generation" begin
-        for T in [UInt8, UInt64, UInt128], I in [Int8, Int64, Int128]
+    @testset "Bulk generation & unsigned output type" begin
+        for T in [UInt8, UInt64, UInt128], I in [Int8, Int64, Int128, UInt8, UInt64, UInt128]
             at = AliasTable{T, I}([1,10,100])
             x = rand(at, 1000)
             @test x isa Vector{I}
@@ -156,6 +159,7 @@ using Random, OffsetArrays, StableRNGs
         @test a != b
         @test a.probability_alias != b.probability_alias
 
+        x = rand(UInt16, 255)
         data = [
             [
                 AliasTable([1, 2, 5]),
@@ -165,6 +169,13 @@ using Random, OffsetArrays, StableRNGs
                 AliasTable{UInt16}([1,2,5]),
                 AliasTable{UInt, Int32}([1,2,5]),
                 AliasTable([UInt64(1)<<61, UInt64(2)<<61, UInt64(5)<<61]),
+            ],[
+                AliasTable{UInt64, UInt8}(x),
+                AliasTable(x)
+            ],[
+                AliasTable{UInt64, Int8}(x[1:127]),
+                AliasTable{UInt64, UInt8}(x[1:127]),
+                AliasTable(x[1:127])
             ],[
                 AliasTable([1, 2, 5, 0, 0]),
             ],[
