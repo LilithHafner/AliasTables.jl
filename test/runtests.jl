@@ -140,6 +140,16 @@ using Random, OffsetArrays, StableRNGs
         end
     end
 
+    @testset "Bulk generation" begin
+        for T in [UInt8, UInt64, UInt128], I in [Int8, Int64, Int128]
+            at = AliasTable{T, I}([1,10,100])
+            x = rand(at, 1000)
+            @test x isa Vector{I}
+            @test all(∈(1:3), x)
+            @test count(==(1), x) < count(==(2), x) < count(==(3), x)
+        end
+    end
+
     @testset "Equality and hashing" begin
         a = AliasTable([1, 2, 3])
         b = AliasTable([1, 2, 3, 0, 0])
