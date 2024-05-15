@@ -5,6 +5,7 @@
 [![Coverage](https://codecov.io/gh/LilithHafner/AliasTables.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/LilithHafner/AliasTables.jl)
 [![PkgEval](https://JuliaCI.github.io/NanosoldierReports/pkgeval_badges/A/AliasTables.svg)](https://JuliaCI.github.io/NanosoldierReports/pkgeval_badges/A/AliasTables.html)
 [![Aqua](https://raw.githubusercontent.com/JuliaTesting/Aqua.jl/master/badge.svg)](https://github.com/JuliaTesting/Aqua.jl)
+[![deps](https://juliahub.com/docs/AliasTables/deps.svg)](https://juliahub.com/ui/Packages/AliasTables/6dCmw?t=2)
 
 AliasTables provides the `AliasTable` type, which is an object that defines a probability
 distribution over `1:n` for some `n`. They are efficient to construct and very efficient to
