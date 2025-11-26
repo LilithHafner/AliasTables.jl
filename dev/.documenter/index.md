@@ -93,7 +93,7 @@ If `x` is chosen uniformly at random from the set of all values representable by
 See also [`AliasTable`](/index#AliasTables.AliasTable), [`AliasTables.probabilities`](/index#AliasTables.probabilities)
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/LilithHafner/AliasTables.jl/blob/57890301e5e39e04ec6bb3c8af1075e0b1a81de7/src/AliasTables.jl#L287-L298" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/LilithHafner/AliasTables.jl/blob/a8e7dfbd9744df7c718d4736d92b11b24e4e7add/src/AliasTables.jl#L287-L298" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -164,7 +164,7 @@ julia> rand(at, 5)
 
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/LilithHafner/AliasTables.jl/blob/57890301e5e39e04ec6bb3c8af1075e0b1a81de7/src/AliasTables.jl#L23-L52" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/LilithHafner/AliasTables.jl/blob/a8e7dfbd9744df7c718d4736d92b11b24e4e7add/src/AliasTables.jl#L23-L52" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -185,7 +185,7 @@ If `x` is chosen uniformly at random from the set of all values representable by
 See also [`AliasTable`](/index#AliasTables.AliasTable), [`AliasTables.probabilities`](/index#AliasTables.probabilities)
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/LilithHafner/AliasTables.jl/blob/57890301e5e39e04ec6bb3c8af1075e0b1a81de7/src/AliasTables.jl#L287-L298" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/LilithHafner/AliasTables.jl/blob/a8e7dfbd9744df7c718d4736d92b11b24e4e7add/src/AliasTables.jl#L287-L298" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -224,7 +224,7 @@ julia> AliasTables.probabilities(AliasTable([0, 1, 0]))
 
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/LilithHafner/AliasTables.jl/blob/57890301e5e39e04ec6bb3c8af1075e0b1a81de7/src/AliasTables.jl#L385-L412" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/LilithHafner/AliasTables.jl/blob/a8e7dfbd9744df7c718d4736d92b11b24e4e7add/src/AliasTables.jl#L385-L412" target="_blank" rel="noreferrer">source</a></Badge>
 
 
 
@@ -247,7 +247,7 @@ julia> AliasTables.probabilities(float, AliasTable([1, 3, 1]))
 
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/LilithHafner/AliasTables.jl/blob/57890301e5e39e04ec6bb3c8af1075e0b1a81de7/src/AliasTables.jl#L436-L451" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/LilithHafner/AliasTables.jl/blob/a8e7dfbd9744df7c718d4736d92b11b24e4e7add/src/AliasTables.jl#L436-L451" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -280,7 +280,7 @@ AliasTable([0x4000000000000000, 0x8000000000000000, 0x4000000000000000])
 
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/LilithHafner/AliasTables.jl/blob/57890301e5e39e04ec6bb3c8af1075e0b1a81de7/src/AliasTables.jl#L76-L94" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/LilithHafner/AliasTables.jl/blob/a8e7dfbd9744df7c718d4736d92b11b24e4e7add/src/AliasTables.jl#L76-L94" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -305,7 +305,7 @@ julia> length(AliasTable([1, 3, 0]))
 
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/LilithHafner/AliasTables.jl/blob/57890301e5e39e04ec6bb3c8af1075e0b1a81de7/src/AliasTables.jl#L456-L467" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/LilithHafner/AliasTables.jl/blob/a8e7dfbd9744df7c718d4736d92b11b24e4e7add/src/AliasTables.jl#L456-L467" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
