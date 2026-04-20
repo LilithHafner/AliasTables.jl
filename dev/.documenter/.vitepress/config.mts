@@ -1,6 +1,7 @@
 import { defineConfig } from 'vitepress'
 import { tabsMarkdownPlugin } from 'vitepress-plugin-tabs'
 import { mathjaxPlugin } from './mathjax-plugin'
+import { juliaReplTransformer } from './julia-repl-transformer'
 import footnote from "markdown-it-footnote";
 import path from 'path'
 
@@ -46,6 +47,7 @@ export default defineConfig({
   ],
   
   markdown: {
+    codeTransformers: [juliaReplTransformer()],
     config(md) {
       md.use(tabsMarkdownPlugin);
       md.use(footnote);
@@ -97,6 +99,7 @@ export default defineConfig({
 { text: 'Home', link: '/index' }
 ]
 ,
+    sidebarDrawer: false,
     editLink: { pattern: "https://https://github.com/LilithHafner/AliasTables.jl/edit/main/docs/src/:path" },
     socialLinks: [
       { icon: 'github', link: 'https://github.com/LilithHafner/AliasTables.jl' }
